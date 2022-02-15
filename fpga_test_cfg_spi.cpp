@@ -158,8 +158,8 @@
 //       Date
 
 uint8_t ver_major = 1;
-uint8_t ver_minor = 9;
-char date[]="09/12/2021";
+uint8_t ver_minor = 10;
+char date[]="15/02/2022";
 
 /*===========================*/
 
@@ -279,6 +279,24 @@ uint32_t *pcie_bar_size_ats   = NULL;
 							
 			}
 			return z;
+		}
+		/* 
+		 * ===  FUNCTION  ======================================================================
+		 *         Name:  press enter to continue
+		 *  Description:  wait enter to go ahead
+		 *  Requiremets:  
+		 *                
+		 * =====================================================================================
+		 */
+		void wait_to_continue()
+		{
+			uint32_t anykey;
+			int ret_code;
+			printf("Press anykey+ENTER to continue : ");
+			if ((ret_code=scanf("%d", &anykey))!=1)
+				{
+					printf("function read error %d\n",ret_code);
+				};
 		}
 		/* 
 		 * ===  FUNCTION  ======================================================================
@@ -1499,12 +1517,12 @@ int main(int argc, char **argv)
 		uint8_t * mem_addr_led;		
 		uint8_t * mem_addr_secs;		
 		uint8_t * mem_addr_sbc;			
-		//uint8_t * mem_addr_ats;														
+		uint8_t * mem_addr_ats;														
 		mem_addr = (uint8_t*)mmap(0, nvramMaxSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_mem[0]);
 		mem_addr_led = (uint8_t*)mmap(0, nvramSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_qli[0]);
 		mem_addr_sbc = (uint8_t*)mmap(0, nvramSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_sbc[0]);
 		mem_addr_secs = (uint8_t*)mmap(0, nvramSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_secs[0]);
-		//mem_addr_ats = (uint8_t*)mmap(0, nvramSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_ats[0]);
+		mem_addr_ats = (uint8_t*)mmap(0, nvramSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_ats[0]);
 	
 		
 		uint8_t *data_read  = (uint8_t *)calloc (256,sizeof(uint8_t));
@@ -1899,6 +1917,7 @@ int main(int argc, char **argv)
 		uint8_t mem_buffer[mem_size];
 		uint32_t bufferSize = 0;
 		uint32_t i;
+		uint32_t getpci_sel;
 		// NVram variable
 		uint32_t nbanks;
 		uint32_t chipsize;
@@ -1998,9 +2017,15 @@ int main(int argc, char **argv)
 		printf("Cmd_61: SRAM Write Test from 0 to MAX size in Mirror mode\n");
 		printf("Cmd_62: (TBD) SRAM Write Test from 0 to MAX size in Normal mode 64\n");
 		printf("Cmd_63: (TBD) SRAM Write Test from 0 to MAX size in Mirror mode 32\n");
+		printf("=============== ATS TEST ==================\n");
+		printf("Cmd_64: ATS enable\n");
+		printf("Cmd_65: ATS status read\n");
+		printf("Cmd_66: Get PCIe status/Enable PCIe/Set command reg\n");
+	
+		//IORd(pcie_bar_mem[1] + 0x14, data_read, 2, 1, NO_PRINT_VALUES); 
 		printf("type 0 to exit \n");
 		
-		printf("Select an item ? [1..52] (other value to exit) ");
+		printf("Select an item ? [1..66] (other value to exit) ");
 		if ((ret_code=scanf("%d", &testchoice))!=1)
 		{
 			printf("function read error %d\n",ret_code);
@@ -2014,7 +2039,9 @@ int main(int argc, char **argv)
 				case 1:
 					{					
 						printf("\n** READ_DEVICE ID **\n"); 
-						rd_dev_id_man_id(CFG_ROM_BASE,CS_CFG_ROM_ENA);	
+						rd_dev_id_man_id(CFG_ROM_BASE,CS_CFG_ROM_ENA);
+						
+						wait_to_continue();	
 						break;
 					}
 				case 2:
@@ -2022,6 +2049,8 @@ int main(int argc, char **argv)
 						printf("\n** READ_STATUS_REGISTER **\n"); 
 						read_sr(data_read,CFG_ROM_BASE,CS_CFG_ROM_ENA);
 						printf("\n Status Register \t = %2.2x ", data_read[0]&0xff);
+						
+						wait_to_continue();
 						break;
 					}
 					
@@ -2031,6 +2060,8 @@ int main(int argc, char **argv)
 						data_write[0]=0x9C; //sr write protect ALL
 						printf("\n   Byte0 \t = %2.2x ", data_write[0]&0xff);
 						write_sr(data_write,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
+						
+						wait_to_continue();
 						break;
 					}
 					
@@ -2060,6 +2091,7 @@ int main(int argc, char **argv)
 
 						page_program(start_addr,data_buffer,byte_lenght,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
 
+						wait_to_continue();
 						break;
 					}
 
@@ -2081,13 +2113,15 @@ int main(int argc, char **argv)
 						};
 						read_data_nbyte(start_addr,byte_lenght,CFG_ROM_BASE,CS_CFG_ROM_ENA);
 
+						wait_to_continue();
 						break;
 					} 
 
 				case 6:
 					{
 						chip_erase(CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
-							
+						
+						wait_to_continue();	
 						break;
 					}
 				
@@ -2110,6 +2144,7 @@ int main(int argc, char **argv)
 						#endif 
 						sector_erase(start_addr,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
 	
+						wait_to_continue();
 						break;
 					}
 					
@@ -2144,6 +2179,7 @@ int main(int argc, char **argv)
 
 						page_program(start_addr,data_buffer,byte_lenght,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 					}
 					
@@ -2223,6 +2259,7 @@ int main(int argc, char **argv)
 
 						page_program(start_addr,data_buffer,byte_lenght,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 					}
 				
@@ -2258,6 +2295,7 @@ int main(int argc, char **argv)
 
 						page_program(start_addr,data_buffer,byte_lenght,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 					}
 					
@@ -2332,6 +2370,7 @@ int main(int argc, char **argv)
 						
 						page_program(start_addr,data_buffer,byte_lenght,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 					}
 					
@@ -2358,6 +2397,7 @@ int main(int argc, char **argv)
 						byte_lenght = 1;
 						page_program(start_addr,data_buffer,byte_lenght,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 					}	
 				
@@ -2412,7 +2452,7 @@ int main(int argc, char **argv)
 
 						page_program(start_addr,data_buffer,byte_lenght,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
 						
-						
+						wait_to_continue();
 						break;
 					}
 					
@@ -2439,6 +2479,7 @@ int main(int argc, char **argv)
 						byte_lenght = 1;
 						page_program(start_addr,data_buffer,byte_lenght,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 					}	
 					
@@ -2479,7 +2520,9 @@ int main(int argc, char **argv)
 									IORd(pcie_bar_io[0] + CFG_ROM_BASE + 0x03, data_read, 1, 1, NO_PRINT_VALUES);
 									printf("\n Frequency Divider \t  = %2.2x\n", data_read[0]&0xff);
 								}; 
-							#endif 					
+							#endif 	
+							
+						wait_to_continue();				
 						break;
 					}  
 					
@@ -2489,6 +2532,8 @@ int main(int argc, char **argv)
 						data_write[0]=0x00; //sr write unprotect ALL
 						printf("\n   Byte0 \t = %2.2x ", data_write[0]&0xff);
 						write_sr(data_write,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
+						
+						wait_to_continue();
 						break;
 					}	
 					
@@ -2654,7 +2699,9 @@ int main(int argc, char **argv)
 				case 20:
 					{					
 						printf("\n** READ_DEVICE ID **\n"); 
-						rd_dev_id_man_id(FPGA_ROM_BASE,CS_FPGA_ROM_ENA);	
+						rd_dev_id_man_id(FPGA_ROM_BASE,CS_FPGA_ROM_ENA);
+						
+						wait_to_continue();	
 						break;
 					}	
 					
@@ -2663,6 +2710,8 @@ int main(int argc, char **argv)
 						printf("\n** READ_STATUS_REGISTER **\n"); 
 						read_sr(data_read,FPGA_ROM_BASE,CS_FPGA_ROM_ENA);
 						printf("\n Status Register \t = %2.2x ", data_read[0]&0xff);
+						
+						wait_to_continue();
 						break;
 					}	
 					
@@ -2684,6 +2733,7 @@ int main(int argc, char **argv)
 						};
 						read_data_nbyte(start_addr,byte_lenght,FPGA_ROM_BASE,CS_FPGA_ROM_ENA);
 
+						wait_to_continue();
 						break;
 					} 
 					
@@ -2712,6 +2762,7 @@ int main(int argc, char **argv)
 
 						page_program(start_addr,data_buffer,byte_lenght,FPGA_ROM_BASE,CS_FPGA_ROM_ENA,PRINT_VALUES);
 
+						wait_to_continue();
 						break;
 					}
 					
@@ -2737,12 +2788,14 @@ int main(int argc, char **argv)
 								if (w_size != size ) 
 								{
 									printf("FAILURE: memory chip protection error\n");											
-								}										
+								}	
+								wait_to_continue();									
 								break;
 							}								
 						else 
 							{			
 								printf("FAILURE: error opening %s. Abort\n", rom_file_name);
+								wait_to_continue();
 								break;
 							}
 					}	
@@ -2804,6 +2857,7 @@ int main(int argc, char **argv)
 					{
 						chip_erase(FPGA_ROM_BASE,CS_FPGA_ROM_ENA,PRINT_VALUES);
 							
+						wait_to_continue();
 						break;
 					}
 				
@@ -2826,6 +2880,7 @@ int main(int argc, char **argv)
 						#endif 					
 						sector_erase(start_addr,FPGA_ROM_BASE,CS_FPGA_ROM_ENA,PRINT_VALUES);
 	
+						wait_to_continue();
 						break;
 					}
 					
@@ -2860,6 +2915,7 @@ int main(int argc, char **argv)
 
 						page_program(start_addr,data_buffer,byte_lenght,FPGA_ROM_BASE,CS_FPGA_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 					}
 					
@@ -2939,6 +2995,7 @@ int main(int argc, char **argv)
 
 						page_program(start_addr,data_buffer,byte_lenght,FPGA_ROM_BASE,CS_FPGA_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 					}
 				
@@ -2974,6 +3031,7 @@ int main(int argc, char **argv)
 
 						page_program(start_addr,data_buffer,byte_lenght,FPGA_ROM_BASE,CS_FPGA_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 					}
 					
@@ -3048,6 +3106,7 @@ int main(int argc, char **argv)
 						
 						page_program(start_addr,data_buffer,byte_lenght,FPGA_ROM_BASE,CS_FPGA_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 					}
 					
@@ -3074,6 +3133,7 @@ int main(int argc, char **argv)
 						byte_lenght = 1;
 						page_program(start_addr,data_buffer,byte_lenght,FPGA_ROM_BASE,CS_FPGA_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 					}	
 				
@@ -3127,8 +3187,8 @@ int main(int argc, char **argv)
 						byte_lenght = 1;
 
 						page_program(start_addr,data_buffer,byte_lenght,FPGA_ROM_BASE,CS_FPGA_ROM_ENA,PRINT_VALUES);
-						
-						
+												
+						wait_to_continue();
 						break;
 					}
 					
@@ -3155,6 +3215,7 @@ int main(int argc, char **argv)
 						byte_lenght = 1;
 						page_program(start_addr,data_buffer,byte_lenght,FPGA_ROM_BASE,CS_FPGA_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 					}	
 					
@@ -3164,6 +3225,8 @@ int main(int argc, char **argv)
 						data_write[0]=0x00; //sr write unprotect ALL
 						printf("\n   Byte0 \t = %2.2x ", data_write[0]&0xff);
 						write_sr(data_write,FPGA_ROM_BASE,CS_FPGA_ROM_ENA,PRINT_VALUES);
+						
+						wait_to_continue();
 						break;
 					}	
 				
@@ -3243,6 +3306,7 @@ int main(int argc, char **argv)
 						
 						page_program(start_addr,data_buffer,byte_lenght,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 					}
 
@@ -3429,6 +3493,8 @@ int main(int argc, char **argv)
 						free(dst_ssl);			
 						free(src);
 						free(data_enc_key_i);
+						
+						wait_to_continue();
 						break;
 					}
 					
@@ -3508,6 +3574,7 @@ int main(int argc, char **argv)
 						
 						page_program(start_addr,data_buffer,byte_lenght,FPGA_ROM_BASE,CS_FPGA_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 					}
 				case 43:
@@ -3516,6 +3583,8 @@ int main(int argc, char **argv)
 						IOWr(pcie_bar_io[0] + 0x24, data_write, 1, 1, 0, NO_PRINT_VALUES);
 						data_write[0] = 0x00;
 						IOWr(pcie_bar_io[0] + 0x24, data_write, 1, 1, 0, NO_PRINT_VALUES);
+						
+						wait_to_continue();
 						break;
 						return 0;
 					} 
@@ -3645,6 +3714,7 @@ int main(int argc, char **argv)
 						
 						page_program(start_addr,data_buffer,byte_lenght,FPGA_ROM_BASE,CS_FPGA_ROM_ENA,PRINT_VALUES);
 						
+						wait_to_continue();
 						break;
 						return 0;
 						
@@ -3656,6 +3726,8 @@ int main(int argc, char **argv)
 						IOWr(pcie_bar_io[0] + 0x23, data_write, 1, 1, 0, NO_PRINT_VALUES);
 						data_write[0] = 0x00;
 						IOWr(pcie_bar_io[0] + 0x23, data_write, 1, 1, 0, NO_PRINT_VALUES);
+						
+						wait_to_continue();
 						break;
 						return 0;
 					} 
@@ -3732,6 +3804,7 @@ int main(int argc, char **argv)
 							printf(".%2.2x%2.2x%2.2x%2.2x",data_buffer[24]&0xff,data_buffer[25]&0xff,data_buffer[26]&0xff,data_buffer[27]&0xff); 
 							printf(".%2.2x%2.2x%2.2x%2.2x",data_buffer[28]&0xff,data_buffer[29]&0xff,data_buffer[30]&0xff,data_buffer[31]&0xff); 
 						
+						wait_to_continue();
 						break;
 						return 0;
 						
@@ -3820,7 +3893,7 @@ int main(int argc, char **argv)
 						IORd(pcie_bar_secs[1] + 0x1C, data_read, 4, 1, NO_PRINT_VALUES);
 						printf("\n Key 255..224:\t 0x%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
 						
-						
+						wait_to_continue();
 						break;
 						return 0;
 						
@@ -3918,7 +3991,8 @@ int main(int argc, char **argv)
 							check_id_error++; 
 							printf("Errore numero %d . Expected trace id value 0x1b1c1847182c1300 got 0x %2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x",check_id_error,trace_id[7],trace_id[6],trace_id[5],trace_id[4],trace_id[3],trace_id[2],trace_id[1],trace_id[0]);
 						}
-																		
+								
+						wait_to_continue();										
 						break;
 					}	
 					
@@ -3998,7 +4072,8 @@ int main(int argc, char **argv)
 								check_id_error++; 
 								printf("Errore numero %d . Expected  expanded key value 0x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x got 0x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x%2.2x",check_id_error,c_expanded_key[15],c_expanded_key[14],c_expanded_key[13],c_expanded_key[12],c_expanded_key[11],c_expanded_key[10],c_expanded_key[9],c_expanded_key[8],c_expanded_key[7],c_expanded_key[6],c_expanded_key[5],c_expanded_key[4],c_expanded_key[3],c_expanded_key[2],c_expanded_key[1],c_expanded_key[0],expanded_key[15],expanded_key[14],expanded_key[13],expanded_key[12],expanded_key[11],expanded_key[10],expanded_key[9],expanded_key[8],expanded_key[7],expanded_key[6],expanded_key[5],expanded_key[4],expanded_key[3],expanded_key[2],expanded_key[1],expanded_key[0]);
 							}
-																		
+								
+						wait_to_continue();										
 						break;
 					}	
 					
@@ -4022,6 +4097,7 @@ int main(int argc, char **argv)
 							}
 						}
 							
+						wait_to_continue();
 						break;
 						return 0;
 					}  
@@ -4121,6 +4197,8 @@ int main(int argc, char **argv)
 						printf("\n Authentication status: %s \n",AUTHENTICA(data_read[0]&0x01)); 
 						
 						free(writeBuffer);
+						
+						wait_to_continue();
 						break;
 						return 0;
 					}  	
@@ -4242,6 +4320,129 @@ int main(int argc, char **argv)
 						printf("\n Authentication status: %s \n",AUTHENTICA(data_read[0]&0x01)); 
 						
 						free(writeBuffer);
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}  	
+					
+				case 65 : 
+					{
+						printf("Cmd_65: ATS pcie_bar_ats read\n");
+						printf("\n == ATS VERSION read==\n"); 
+						MRd32(mem_addr_ats + 0x24, data_read, 4, 4, NO_PRINT_VALUES); 
+						printf("\n version major: %2.2x \n",(data_read[0]&0xFF)); 
+						printf("\n version minor: %2.2x \n",(data_read[1]&0xFF)); 
+						printf("\n == ATS STATUS read==\n"); 
+						MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 
+						printf("\n status 0x20: %2.2x \n",(data_read[0]&0xFF)); 
+						printf("\n status 0x21: %2.2x \n",(data_read[1]&0xFF)); 
+						
+						MRd32(mem_addr_ats + 0x80, data_buffer, 256, 4, 1);//NO_PRINT_VALUES); 
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}  	
+					
+				case 66 : 
+					{
+						
+						
+						printf("-- ============================\n");
+						printf("--       Get PCIe status       \n");		
+						printf("--  (1) Quixant LSPCI          \n");
+						printf("--  (2) tree diagram lspci     \n");
+						printf("--  (3) PCIe BAR size/offset   \n");
+						printf("--  (4) BAR config register    \n");
+						printf("--  (5) Enable PCIe/Set command\n");
+						printf("-- ============================\n");
+						
+						
+						printf("Selection :    ? : ");
+						if ((ret_code=scanf("%d", &getpci_sel))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+												
+						switch(getpci_sel)
+							{
+							case 1: 
+								
+								sprintf (path, "sudo lspci -vvv -d 19D4:");
+								system_return = system(path);
+								break;
+
+							case 2: 
+							
+								sprintf (path, "sudo lspci -vvv -t");
+								system_return = system(path);
+								break;
+
+							case 3: 
+										
+								find_pci_reg(IO_DEVID,		pcie_bar_io,	pcie_bar_size_io,	1);	
+								find_pci_reg(NVRAM_DEVID,	pcie_bar_mem,	pcie_bar_size_mem,	1);
+								find_pci_reg(SECs_DEVID,	pcie_bar_secs,	pcie_bar_size_secs,	1);	
+								find_pci_reg(MUART_DEVID,	pcie_bar_muart,	pcie_bar_size_muart,1);
+								find_pci_reg(QLI_DEVID,		pcie_bar_qli,	pcie_bar_size_qli,	1);		
+								find_pci_reg(SBC_DEVID,		pcie_bar_sbc,	pcie_bar_size_sbc,	1);		
+								find_pci_reg(ATS_DEVID,		pcie_bar_ats,	pcie_bar_size_ats,	1);
+								break;
+
+							case 4:	
+								
+								sprintf (path, "sudo lspci -xxx -d 19D4:");
+								system_return = system(path);
+								break;
+
+							case 5:	
+								
+								printf("-- =======================================\n");
+								printf("--            Set PCIe command            \n");		
+								printf("--  (1) enable IO/MEM/DMA in all function \n");
+								printf("--  (2) enable IO/MEM in all function     \n");
+								printf("--  (3) enable ATS function               \n");
+								printf("--  (4)                                   \n");
+								printf("--  (5)                                   \n");
+								printf("-- =======================================\n");
+									
+								printf("Selection :    ? : ");
+								if ((ret_code=scanf("%d", &getpci_sel))!=1)
+								{
+									printf("function read error %d\n",ret_code);
+								};
+								
+									switch(getpci_sel)
+									{
+									case 1: 
+										
+										sprintf (path, "sudo setpci -d 19d4: 04.b=07");
+										system_return = system(path);
+										break;
+
+									case 2: 
+									
+										sprintf (path, "sudo setpci -d 19d4: 04.b=03");
+										system_return = system(path);
+										break;
+
+									case 3: 
+												 
+										//sprintf (path, "sudo setpci -s :07:00.5 04.b=03");	
+										sprintf (path, "sudo setpci -d 19d4:0c00 04.b=07");									
+										system_return = system(path);
+										break;
+
+									default:
+										break;
+									}
+								
+							default:
+								break;
+							}
+						
+						wait_to_continue();
 						break;
 						return 0;
 					}  	
