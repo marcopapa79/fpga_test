@@ -4424,7 +4424,7 @@ int main(int argc, char **argv)
 							}  
 						} 
 						
-						printf("Insert number of iteration (0 = infinite time = Icc consumption is chiappa su): ");
+						printf("Insert number of iteration (0 = infinite time): ");
 						if ((ret_code=scanf("%d", &number_of_iteration))!=1)
 						{
 							printf("function read error %d\n",ret_code);
@@ -4438,7 +4438,10 @@ int main(int argc, char **argv)
 						uint32_t i;
 						uint32_t rpt;
 						uint32_t j;
-						//bufferSize = nvramMaxSize; 
+						
+						// enable all bank
+						data_write[0]=0x0F;
+						IOWr(pcie_bar_mem[1] + 0x0D, data_write, 1, 1, 0, NO_PRINT_VALUES);
 						
 						while (sram_test < 4) 
 							{
@@ -4447,42 +4450,48 @@ int main(int argc, char **argv)
 								data_write[2]=MIRROR_MODEx32;
 								data_write[3]=MIRROR_MODE;
 								IOWr(pcie_bar_mem[1] + 0x0C, data_write, 1, 1, sram_test, NO_PRINT_VALUES); 
-								// enable all bank
-								data_write[0]=0x0F;
-								IOWr(pcie_bar_mem[1] + 0x0D, data_write, 1, 1, 0, NO_PRINT_VALUES);
-										if (!bufferSize) bufferSize = nvramMaxSize;  
-								
+																		
 								if (sram_test==0)  
 									{
 										if (!bufferSize) bufferSize = nvramMaxSize;  
 									}	
 								else if (sram_test==1)  
 									{
-										if (!bufferSize) bufferSize = (nvramMaxSize/2);  
+										bufferSize = (nvramMaxSize/2);  
 									}
 								else if (sram_test==2)  
 									{
-										if (!bufferSize) bufferSize = (nvramMaxSize/2);  
+										bufferSize = (nvramMaxSize/2);  
 									}
 								else  
 									{
-										if (!bufferSize) bufferSize = (nvramMaxSize/4);  
+										bufferSize = (nvramMaxSize/4);  
 									}
+									
 								writeBuffer = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
 								readBuffer = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
 								
 								
 								printf("Assigning random values to a %u bytes local buffer...\n", bufferSize);
 								for (x = 0; x < bufferSize; x++)
-									*(writeBuffer + x) = (uint8_t)(x & 0x000000FF);
-									//*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
+									//*(writeBuffer + x) = (uint8_t)(x & 0x000000FF);
+									*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
 								
 																	
 								printf("Writing local buffer to memory...\n");
 								rpt = 0;
 														
-								while (rpt < (number_of_iteration+1))
+								while ((rpt < number_of_iteration) || (number_of_iteration==0))
 								{	
+									
+									#if _DEBUG	
+									{	
+										printf("\n\n === number of test %d ===",sram_test);
+										printf("\n\n === %u bytes buffer ram===", bufferSize);
+										printf("\n\n === repetition number %d===",rpt);
+										printf("\n\n === request number of iteration %d===\n",number_of_iteration);
+									}; 
+									#endif 
 									i = 0;
 									while (i < bufferSize)
 										{
@@ -4497,7 +4506,7 @@ int main(int argc, char **argv)
 											
 											for(j = i; j < (i+sram_access_type); j++)
 											{
-												if (writeBuffer[j]!=readBuffer[j]) printf("\n Error at address %d: Expected: 0x%2.2x got: 0x%2.2x\n",j,writeBuffer[j]&0xff,readBuffer[j]&0xff); 
+												if ((writeBuffer[j]!=readBuffer[j]) && j<256) printf("\n Error at address %d: Expected: 0x%2.2x got: 0x%2.2x\n",j,writeBuffer[j]&0xff,readBuffer[j]&0xff); 
 											}
 											i += sram_access_type;		
 		  
@@ -4505,10 +4514,10 @@ int main(int argc, char **argv)
 										 
 										
 		 
-									if (number_of_iteration > 0) rpt++; // check if number of iteration is infinite
+									rpt++; // check if number of iteration is infinite
 										
 								}	
-								
+								rpt = 0;
 								sram_test++;
 							}		
 						IORd(pcie_bar_io[0] + 0x20, data_read, 1, 1, NO_PRINT_VALUES);
