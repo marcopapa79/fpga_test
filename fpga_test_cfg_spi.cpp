@@ -290,13 +290,14 @@ uint32_t *pcie_bar_size_ats   = NULL;
 		 */
 		void wait_to_continue()
 		{
-			uint32_t anykey;
-			int ret_code;
-			printf("Press anykey+ENTER to continue : ");
+			printf("Press ENTER key to Continue\n");  
+			getchar();
+			getchar(); 
+			/*
 			if ((ret_code=scanf("%d", &anykey))!=1)
 				{
 					printf("function read error %d\n",ret_code);
-				};
+				};*/
 		}
 		/* 
 		 * ===  FUNCTION  ======================================================================
@@ -1854,7 +1855,7 @@ int main(int argc, char **argv)
 	printf("\n\n =======================================");  
 	printf("\n Config ROM SPI core frequency selection\n\n");  
 	//printf("\n ==================================\n");  
- 	
+ 	/*
 	printf(" 1: 64MHz \n");	//(x00+1)=1 	64/1=64
 	printf(" 2: 32MHz \n");	//(x01+1)=2 	64/2=32  
 	printf(" 3: 16MHz \n");	//(x03+1)=4 	64/4=16        
@@ -1890,7 +1891,10 @@ int main(int argc, char **argv)
 				printf("\n Frequency Divider \t  = %2.2x\n", data_read[0]&0xff);
 			}; 
 		#endif 
+		*/
 		
+		data_write[0]=0x07;							
+		IOWr(pcie_bar_io[0] + 0x4B, data_write, 1, 1, 0, NO_PRINT_VALUES);
 		// setup clock freq fpga spi max freq
 		data_write[0]=0x00;							
 		IOWr(pcie_bar_io[0] + FPGA_ROM_BASE + 0x03, data_write, 1, 1, 0, NO_PRINT_VALUES);
@@ -2018,14 +2022,18 @@ int main(int argc, char **argv)
 		printf("Cmd_62: (TBD) SRAM Write Test from 0 to MAX size in Normal mode 64\n");
 		printf("Cmd_63: (TBD) SRAM Write Test from 0 to MAX size in Mirror mode 32\n");
 		printf("=============== ATS TEST ==================\n");
-		printf("Cmd_64: ATS enable\n");
+		printf("Cmd_64: (TBD) ATS enable\n");
 		printf("Cmd_65: ATS status read\n");
-		printf("Cmd_66: Get PCIe status/Enable PCIe/Set command reg\n");
+		printf("=============== DIO TEST ==================\n");
+		printf("Cmd_66: DIN status\n");
+		printf("Cmd_67: DIN interrupt test\n");
+		printf("=============== PCIe utility ==================\n");
+		printf("Cmd_99: Get PCIe status/Enable PCIe/Set command reg\n");
 	
 		//IORd(pcie_bar_mem[1] + 0x14, data_read, 2, 1, NO_PRINT_VALUES); 
 		printf("type 0 to exit \n");
 		
-		printf("Select an item ? [1..66] (other value to exit) ");
+		printf("Select an item ? [1..99] (other value to exit) ");
 		if ((ret_code=scanf("%d", &testchoice))!=1)
 		{
 			printf("function read error %d\n",ret_code);
@@ -4346,6 +4354,121 @@ int main(int argc, char **argv)
 					}  	
 					
 				case 66 : 
+					{
+						
+						
+						printf("-- ============================\n");
+						printf("--       Get DIN status        \n");	
+						printf("-- ============================\n");
+						
+						IORd(pcie_bar_io[0] + 0x00, data_read, 4, 1, NO_PRINT_VALUES);      
+						printf("\n Din[0 ..31] = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+						IORd(pcie_bar_io[0] + 0x04, data_read, 4, 1, NO_PRINT_VALUES);      
+						printf("\n Din[63..32] = 0x%2.2x.%2.2x.%2.2x.%2.2x\n",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}  	
+						
+			
+				case 67 : 
+					{
+						// disable debounce
+						data_write[0] = 0x00; 
+						data_write[1] = 0x00;  
+						data_write[2] = 0x00; 	
+						data_write[3] = 0x00;  
+							
+						IOWr(pcie_bar_io[0] + 0x3C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3D, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3E, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3F, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x40, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x41, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x42, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x43, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						
+						// walking 1
+						for(i = 0; i < 32; i++)
+						{
+							data_write[0] = 0xff-(0x01<<i);  	
+							data_write[1] = 0xff-(0x01<<(i-8));  	
+							data_write[2] = 0xff-(0x01<<(i-16));   	
+							data_write[3] = 0xff-(0x01<<(i-24));  		
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, 1); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, 1); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, 1); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, 1); 
+						
+			
+							data_write[0] = 0x00; 
+							data_write[1] = 0x00;  
+							data_write[2] = 0x00; 	
+							data_write[3] = 0x00;  
+							
+							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+					
+							usleep(2*100*1000);
+					
+							printf("-- ============================\n");
+							printf("--       Get DIN status        \n");	
+							printf("-- ============================\n");
+							
+							IORd(pcie_bar_io[0] + 0x00, data_read, 4, 1, NO_PRINT_VALUES);      
+							printf("\n Din[0 ..31] = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							IORd(pcie_bar_io[0] + 0x04, data_read, 4, 1, NO_PRINT_VALUES);      
+							printf("\n Din[63..32] = 0x%2.2x.%2.2x.%2.2x.%2.2x\n",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+														
+						}
+						
+						
+						// walking 0
+						for(i = 0; i < 32; i++)
+						{
+							data_write[0] = (0x01<<i);  	
+							data_write[1] = (0x01<<(i-8));  	
+							data_write[2] = (0x01<<(i-16));   	
+							data_write[3] = (0x01<<(i-24));  		
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, 1); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, 1); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, 1); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, 1); 
+						
+			
+							data_write[0] = 0x00; 
+							data_write[1] = 0x00;  
+							data_write[2] = 0x00; 	
+							data_write[3] = 0x00;  
+							
+							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+					
+							usleep(2*100*1000);
+					
+							printf("-- ============================\n");
+							printf("--       Get DIN status        \n");	
+							printf("-- ============================\n");
+							
+							IORd(pcie_bar_io[0] + 0x00, data_read, 4, 1, NO_PRINT_VALUES);      
+							printf("\n Din[0 ..31] = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							IORd(pcie_bar_io[0] + 0x04, data_read, 4, 1, NO_PRINT_VALUES);      
+							printf("\n Din[63..32] = 0x%2.2x.%2.2x.%2.2x.%2.2x\n",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+														
+						}
+						
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}  	
+								
+				case 99 : 
 					{
 						
 						
