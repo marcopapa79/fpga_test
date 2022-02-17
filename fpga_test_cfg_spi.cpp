@@ -150,6 +150,16 @@
 #define F_256KHz			08
 /*===========================*/
 
+/*===========================
+===== SRAM Parameters =====*/
+#define NORMAL_MODEx64		0x80
+#define MIRROR_MODEx32		0x40
+
+#define AUTOVERIFY_MODE		0x08
+#define BANK_MODE			0x04
+#define MIRROR_MODE			0x02
+#define NORMAL_MODE			0x01
+
 #define AES_SIZE_MODES     2  // defined only two AES modes 128 and 256
 #define MAX_KEY_NUM       16  // FPGA hardcoded keys
 /*===========================*/
@@ -2019,7 +2029,7 @@ int main(int argc, char **argv)
 		printf("=============== SRAM TEST ==================\n");
 		printf("Cmd_60: SRAM Write Test from 0 to MAX size in Normal mode\n");
 		printf("Cmd_61: SRAM Write Test from 0 to MAX size in Mirror mode\n");
-		printf("Cmd_62: (TBD) SRAM Write Test from 0 to MAX size in Normal mode 64\n");
+		printf("Cmd_62: SRAM Write Test from 0 to MAX size in Normal mode 64\n");
 		printf("Cmd_63: (TBD) SRAM Write Test from 0 to MAX size in Mirror mode 32\n");
 		printf("=============== ATS TEST ==================\n");
 		printf("Cmd_64: (TBD) ATS enable\n");
@@ -4328,6 +4338,184 @@ int main(int argc, char **argv)
 						printf("\n Authentication status: %s \n",AUTHENTICA(data_read[0]&0x01)); 
 						
 						free(writeBuffer);
+						
+						wait_to_continue();
+						break;
+						return 0;
+					} 
+	
+				case 62 : 
+					{
+						#if _DEBUG	
+						{	
+							printf("\n\n === max ram size %d ===",nvramMaxSize);
+							printf("\n\n === max ram size %d===",pcie_bar_size_mem[0]);
+						}; 
+						#endif 
+						
+						
+						printf("\n\n");
+						IORd(pcie_bar_mem[1] + 0x14, data_read, 2, 1, NO_PRINT_VALUES); 
+						printf("\n ===================================");
+						printf("\n === SRAM MODULE (HW parameters) ===");
+						printf("\n =====      Version %2.2x.%2.2x      =====",data_read[0]&0xff,data_read[1]&0xff); 
+						#if _DEBUG	
+						{	
+							printf("\n\n === MODE REGISTER READ ===");
+							IORd(pcie_bar_mem[1] + 0x0C, data_read, 1, 1, 1);
+						}; 
+						#endif 
+						data_write[0]=NORMAL_MODEx64;
+						IOWr(pcie_bar_mem[1] + 0x0C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						// enable all bank
+						data_write[0]=0x0F;
+						IOWr(pcie_bar_mem[1] + 0x0D, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						#if _DEBUG	
+						{	
+							printf("\n\n === MODE REGISTER READ ===");
+							IORd(pcie_bar_mem[1] + 0x0C, data_read, 1, 1, 1);//NO_PRINT_VALUES);
+						}; 						
+						#endif 
+						
+						uint32_t sram_access_type;
+						uint32_t number_of_iteration;
+						uint32_t nchip;
+						
+						printf("\n\n Quixant Platform Configuration \n\n");
+						printf("   Two SRAM chips   :   Qxi400,Qxi7000,Qxi7000lite,Qxi6000,IQ1,SB7,IQ1-air\n");
+						printf("   Four SRAM chips  :   Qx50,Qx60,QMAX-1,Qx70,QMAX-2/A,Qmax3lite\n");
+						printf("\n How Many Chips ? [2 = 2 SRAM chip, 4 = 4 SRAM chip] ");
+						if ((ret_code=scanf("%d", &nchip))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+						switch(nchip)
+						{
+							case 2:
+							case 4:
+							{	
+								break;
+							}
+							default:
+							{	
+								nchip = 4;
+								break;
+							}  
+						} 
+							
+						printf("\n\n Insert Type SRAM acces 1 = byte, 2 = word, 4 = dword, 8 = qword: ");
+						if ((ret_code=scanf("%d", &sram_access_type))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+						switch(sram_access_type)
+						{
+							case 1:
+							case 2:
+							case 4:
+							case 8:
+							{	
+								break;
+							}
+							default:
+							{	
+								sram_access_type = 8;
+								break;
+							}  
+						} 
+						
+						printf("Insert number of iteration (0 = infinite time = Icc consumption is chiappa su): ");
+						if ((ret_code=scanf("%d", &number_of_iteration))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+						
+						uint8_t *writeBuffer;
+						uint8_t *readBuffer;
+						uint32_t sram_test=0;
+						
+						uint32_t x;
+						uint32_t i;
+						uint32_t rpt;
+						uint32_t j;
+						//bufferSize = nvramMaxSize; 
+						
+						while (sram_test < 4) 
+							{
+								data_write[0]=NORMAL_MODEx64;
+								data_write[1]=NORMAL_MODE;
+								data_write[2]=MIRROR_MODEx32;
+								data_write[3]=MIRROR_MODE;
+								IOWr(pcie_bar_mem[1] + 0x0C, data_write, 1, 1, sram_test, NO_PRINT_VALUES); 
+								// enable all bank
+								data_write[0]=0x0F;
+								IOWr(pcie_bar_mem[1] + 0x0D, data_write, 1, 1, 0, NO_PRINT_VALUES);
+										if (!bufferSize) bufferSize = nvramMaxSize;  
+								
+								if (sram_test==0)  
+									{
+										if (!bufferSize) bufferSize = nvramMaxSize;  
+									}	
+								else if (sram_test==1)  
+									{
+										if (!bufferSize) bufferSize = (nvramMaxSize/2);  
+									}
+								else if (sram_test==2)  
+									{
+										if (!bufferSize) bufferSize = (nvramMaxSize/2);  
+									}
+								else  
+									{
+										if (!bufferSize) bufferSize = (nvramMaxSize/4);  
+									}
+								writeBuffer = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
+								readBuffer = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
+								
+								
+								printf("Assigning random values to a %u bytes local buffer...\n", bufferSize);
+								for (x = 0; x < bufferSize; x++)
+									*(writeBuffer + x) = (uint8_t)(x & 0x000000FF);
+									//*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
+								
+																	
+								printf("Writing local buffer to memory...\n");
+								rpt = 0;
+														
+								while (rpt < (number_of_iteration+1))
+								{	
+									i = 0;
+									while (i < bufferSize)
+										{
+											MWr32(mem_addr+i, &writeBuffer[i], sram_access_type, sram_access_type, NO_PRINT_VALUES); 
+											i += sram_access_type;		
+										}
+									
+									i = 0;
+									while (i < bufferSize)
+										{
+											MRd32(mem_addr+i, &readBuffer[i], sram_access_type, sram_access_type, NO_PRINT_VALUES);
+											
+											for(j = i; j < (i+sram_access_type); j++)
+											{
+												if (writeBuffer[j]!=readBuffer[j]) printf("\n Error at address %d: Expected: 0x%2.2x got: 0x%2.2x\n",j,writeBuffer[j]&0xff,readBuffer[j]&0xff); 
+											}
+											i += sram_access_type;		
+		  
+										}
+										 
+										
+		 
+									if (number_of_iteration > 0) rpt++; // check if number of iteration is infinite
+										
+								}	
+								
+								sram_test++;
+							}		
+						IORd(pcie_bar_io[0] + 0x20, data_read, 1, 1, NO_PRINT_VALUES);
+						printf("\n Authentication status: %s \n",AUTHENTICA(data_read[0]&0x01)); 
+						
+						free(writeBuffer);
+						free(readBuffer);
 						
 						wait_to_continue();
 						break;
