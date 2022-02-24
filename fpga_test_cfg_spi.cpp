@@ -1538,6 +1538,7 @@ int main(int argc, char **argv)
 		
 		uint8_t *data_read  = (uint8_t *)calloc (256,sizeof(uint8_t));
 		uint8_t *data_write = (uint8_t *)calloc (256,sizeof(uint8_t));
+		uint8_t *expected_data = (uint8_t *)calloc (256,sizeof(uint8_t));
 		uint8_t *fpga_wdata = (uint8_t *)malloc(mem_size);
 		uint8_t *fpga_rdata = (uint8_t *)malloc(mem_size);
 		uint8_t trace_id[8];
@@ -4586,6 +4587,12 @@ int main(int argc, char **argv)
 						IOWr(pcie_bar_io[0] + 0x42, data_write, 1, 1, 2, NO_PRINT_VALUES); 
 						IOWr(pcie_bar_io[0] + 0x43, data_write, 1, 1, 3, NO_PRINT_VALUES); 
 						
+						printf("-- ============================\n");
+						printf("--      Dout Walking ON/OFF    \n");
+						printf("-- ============================\n");
+						printf("\n\n");
+						
+						printf("-- ============================\n");
 						// walking 1
 						for(i = 0; i < 32; i++)
 						{
@@ -4593,69 +4600,109 @@ int main(int argc, char **argv)
 							data_write[1] = 0xff-(0x01<<(i-8));  	
 							data_write[2] = 0xff-(0x01<<(i-16));   	
 							data_write[3] = 0xff-(0x01<<(i-24));  		
-							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, 1); 
-							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, 1); 
-							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, 1); 
-							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, 1); 
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
 						
 			
-							data_write[0] = 0x00; 
-							data_write[1] = 0x00;  
-							data_write[2] = 0x00; 	
-							data_write[3] = 0x00;  
+							data_write[4] = 0xff; 
+							data_write[5] = 0xff; 
+							data_write[6] = 0xff; 	
+							data_write[7] = 0xff; 
 							
-							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
-							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 1, NO_PRINT_VALUES); 
-							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 2, NO_PRINT_VALUES); 
-							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 4, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 5, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 6, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 7, NO_PRINT_VALUES); 
 					
 							usleep(2*100*1000);
 					
-							printf("-- ============================\n");
-							printf("--       Get DIN status        \n");	
-							printf("-- ============================\n");
+							//printf("\n");
+							//printf("-- ============================\n");
+							printf("--       Dout: %d OFF       \n",i);
 							
+							printf("\n Set Dout[31..0] = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_write[3]&0xff,data_write[2]&0xff,data_write[1]&0xff,data_write[0]&0xff); 
 							IORd(pcie_bar_io[0] + 0x00, data_read, 4, 1, NO_PRINT_VALUES);      
-							printf("\n Din[0 ..31] = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							printf("\n Got Din[31..0]  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							expected_data[0]=0xff-data_write[0];
+							expected_data[1]=0xff-data_write[1];
+							expected_data[2]=0xff-data_write[2];
+							expected_data[3]=0xff-data_write[3];
+							/*
 							IORd(pcie_bar_io[0] + 0x04, data_read, 4, 1, NO_PRINT_VALUES);      
 							printf("\n Din[63..32] = 0x%2.2x.%2.2x.%2.2x.%2.2x\n",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
-														
+							expected_data[4]=0xff-data_write[4];
+							expected_data[5]=0xff-data_write[5];
+							expected_data[6]=0xff-data_write[6];
+							expected_data[7]=0xff-data_write[7];
+							*/
+							if (data_read[0]!=expected_data[0]) printf("\n Error at byte 0: Expected: 0x%2.2x got: 0x%2.2x",expected_data[0]&0xff,data_read[0]&0xff); 
+							if (data_read[1]!=expected_data[1]) printf("\n Error at byte 1: Expected: 0x%2.2x got: 0x%2.2x",expected_data[1]&0xff,data_read[1]&0xff); 
+							if (data_read[2]!=expected_data[2]) printf("\n Error at byte 2: Expected: 0x%2.2x got: 0x%2.2x",expected_data[2]&0xff,data_read[2]&0xff); 
+							if (data_read[3]!=expected_data[3]) printf("\n Error at byte 3: Expected: 0x%2.2x got: 0x%2.2x",expected_data[3]&0xff,data_read[3]&0xff); 
+												
+											
+							printf("\n");
+							printf("-- ============================\n");
 						}
 						
+							printf("\n");
+							printf("-- ============================\n");
 						
 						// walking 0
 						for(i = 0; i < 32; i++)
 						{
+							
 							data_write[0] = (0x01<<i);  	
 							data_write[1] = (0x01<<(i-8));  	
 							data_write[2] = (0x01<<(i-16));   	
 							data_write[3] = (0x01<<(i-24));  		
-							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, 1); 
-							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, 1); 
-							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, 1); 
-							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, 1); 
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
 						
 			
-							data_write[0] = 0x00; 
-							data_write[1] = 0x00;  
-							data_write[2] = 0x00; 	
-							data_write[3] = 0x00;  
+							data_write[4] = 0x00; 
+							data_write[5] = 0x00;  
+							data_write[6] = 0x00; 	
+							data_write[7] = 0x00;  
 							
-							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
-							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 1, NO_PRINT_VALUES); 
-							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 2, NO_PRINT_VALUES); 
-							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 4, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 5, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 6, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 7, NO_PRINT_VALUES); 
 					
 							usleep(2*100*1000);
 					
-							printf("-- ============================\n");
-							printf("--       Get DIN status        \n");	
-							printf("-- ============================\n");
+							//printf("\n");
+							//printf("-- ============================\n");
+							printf("--       Dout: %d ON       \n",i);
 							
+							printf("\n Set Dout[31..0] = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_write[3]&0xff,data_write[2]&0xff,data_write[1]&0xff,data_write[0]&0xff); 
 							IORd(pcie_bar_io[0] + 0x00, data_read, 4, 1, NO_PRINT_VALUES);      
-							printf("\n Din[0 ..31] = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							printf("\n Got Din[31..0]  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							expected_data[0]=0xff-data_write[0];
+							expected_data[1]=0xff-data_write[1];
+							expected_data[2]=0xff-data_write[2];
+							expected_data[3]=0xff-data_write[3];
+							/*
 							IORd(pcie_bar_io[0] + 0x04, data_read, 4, 1, NO_PRINT_VALUES);      
 							printf("\n Din[63..32] = 0x%2.2x.%2.2x.%2.2x.%2.2x\n",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							expected_data[4]=0xff-data_write[4];
+							expected_data[5]=0xff-data_write[5];
+							expected_data[6]=0xff-data_write[6];
+							expected_data[7]=0xff-data_write[7];
+							*/
+							if (data_read[0]!=expected_data[0]) printf("\n Error at byte 0: Expected: 0x%2.2x got: 0x%2.2x",expected_data[0]&0xff,data_read[0]&0xff); 
+							if (data_read[1]!=expected_data[1]) printf("\n Error at byte 1: Expected: 0x%2.2x got: 0x%2.2x",expected_data[1]&0xff,data_read[1]&0xff); 
+							if (data_read[2]!=expected_data[2]) printf("\n Error at byte 2: Expected: 0x%2.2x got: 0x%2.2x",expected_data[2]&0xff,data_read[2]&0xff); 
+							if (data_read[3]!=expected_data[3]) printf("\n Error at byte 3: Expected: 0x%2.2x got: 0x%2.2x",expected_data[3]&0xff,data_read[3]&0xff); 
+
+							printf("\n");
+							printf("-- ============================\n");
+								
 														
 						}
 						
@@ -4810,6 +4857,7 @@ int main(int argc, char **argv)
 	
 	free(data_read);
 	free(data_write);
+	free(expected_data);
 	
     free(fpga_wdata);
     free(fpga_rdata);
