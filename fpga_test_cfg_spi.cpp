@@ -4587,6 +4587,32 @@ int main(int argc, char **argv)
 						IOWr(pcie_bar_io[0] + 0x42, data_write, 1, 1, 2, NO_PRINT_VALUES); 
 						IOWr(pcie_bar_io[0] + 0x43, data_write, 1, 1, 3, NO_PRINT_VALUES); 
 						
+						// enable interrupt
+						data_write[0] = 0xff; 
+						IOWr(pcie_bar_io[0] + 0x08, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x09, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x0A, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x0B, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x0C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x0D, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x0E, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x0F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						
+						// enable interrupt dual edge
+						IOWr(pcie_bar_io[0] + 0x10, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x11, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x12, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x13, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x14, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x15, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x16, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x17, data_write, 1, 1, 0, NO_PRINT_VALUES);
+						
+						data_write[0] = 0x08; 
+						IOWr(pcie_bar_io[0] + 0x28, data_write, 1, 1, 0, NO_PRINT_VALUES);   
+						IORd(pcie_bar_io[0] + 0x28, data_read, 1, 1, NO_PRINT_VALUES);      
+						printf("\n Status Register = 0x%2.2x\n",data_read[0]&0xff); 
+							
 						printf("-- ============================\n");
 						printf("--      Dout Walking ON/OFF    \n");
 						printf("-- ============================\n");
@@ -4641,7 +4667,9 @@ int main(int argc, char **argv)
 							if (data_read[1]!=expected_data[1]) printf("\n Error at byte 1: Expected: 0x%2.2x got: 0x%2.2x",expected_data[1]&0xff,data_read[1]&0xff); 
 							if (data_read[2]!=expected_data[2]) printf("\n Error at byte 2: Expected: 0x%2.2x got: 0x%2.2x",expected_data[2]&0xff,data_read[2]&0xff); 
 							if (data_read[3]!=expected_data[3]) printf("\n Error at byte 3: Expected: 0x%2.2x got: 0x%2.2x",expected_data[3]&0xff,data_read[3]&0xff); 
-												
+										
+							IORd(pcie_bar_io[0] + 0x28, data_read, 1, 1, NO_PRINT_VALUES);      
+							printf("\n Status Register = 0x%2.2x\n",data_read[0]&0xff); 			
 											
 							printf("\n");
 							printf("-- ============================\n");
@@ -4699,7 +4727,10 @@ int main(int argc, char **argv)
 							if (data_read[1]!=expected_data[1]) printf("\n Error at byte 1: Expected: 0x%2.2x got: 0x%2.2x",expected_data[1]&0xff,data_read[1]&0xff); 
 							if (data_read[2]!=expected_data[2]) printf("\n Error at byte 2: Expected: 0x%2.2x got: 0x%2.2x",expected_data[2]&0xff,data_read[2]&0xff); 
 							if (data_read[3]!=expected_data[3]) printf("\n Error at byte 3: Expected: 0x%2.2x got: 0x%2.2x",expected_data[3]&0xff,data_read[3]&0xff); 
-
+							
+							IORd(pcie_bar_io[0] + 0x28, data_read, 1, 1, NO_PRINT_VALUES);      
+							printf("\n Status Register = 0x%2.2x\n",data_read[0]&0xff); 		
+							
 							printf("\n");
 							printf("-- ============================\n");
 								
