@@ -203,6 +203,13 @@ uint32_t sizeSecsBuffer = 32*16;
 #define MASTER_KEY(x)((x) == 0?"Master Key Feature not supported":"Master Key Feature supported")
 #define MASTER_KEY_FROM_LP(x)((x) == 1?"MASTER KEY FLAG ASSERTED":"MASTER KEY FLAG DEASSERTED")
 
+
+#define ENABLE_ATS(x)((x) == 1?"ATS_ENABLED":"ATS_DISABLED")
+#define ENABLE_ATS_DHCP(x)((x) == 1?"ATS_DHCP_ENABLED":"ATS_DHCP_DISABLED")
+#define ENABLE_ATS_IPV6(x)((x) == 1?"ATS_IPV6_ENABLED":"ATS_IPV6_DISABLED")
+#define ENABLE_ATS_VARIABLE_PACKET(x)((x) == 1?"VARIABLE_PACKET_ENABLED":"VARIABLE_PACKET_DISABLED")
+#define ENABLE_ATS_TRIGGER(x)((x) == 1?"ATS_TRIGGER_ENABLED":"ATS_TRIGGER_DISABLED")
+
 /*====================================
 = Pointer Declaration of PCIe BARs =*/
 uint32_t *pcie_bar_io         = NULL;
@@ -4539,12 +4546,22 @@ int main(int argc, char **argv)
 						MRd32(mem_addr_ats + 0x24, data_read, 4, 4, NO_PRINT_VALUES); 
 						printf("\n version major: %2.2x \n",(data_read[0]&0xFF)); 
 						printf("\n version minor: %2.2x \n",(data_read[1]&0xFF)); 
-						printf("\n == ATS STATUS read==\n"); 
+						printf("\n == ATS Status Enable Register ==\n"); 
 						MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 
-						printf("\n status 0x20: %2.2x \n",(data_read[0]&0xFF)); 
+						printf("\n ATS \t\t= %s", ENABLE_ATS(data_read[0]&0x01));
+						printf("\n ATS DHCP \t= %s", ENABLE_ATS_DHCP((data_read[0]>>1)&0x01));
+						printf("\n ATS IPV6 \t= %s", ENABLE_ATS_IPV6((data_read[0]>>1)&0x02));
+						printf("\n ATS VAR PACKET = %s", ENABLE_ATS_VARIABLE_PACKET((data_read[0]>>3)&0x01));
+						printf("\n ATS TRIGGER \t= %s", ENABLE_ATS_TRIGGER((data_read[0]>>4)&0x01));
+						
+						MRd32(mem_addr_ats + 0x08, data_read, 4, 4, NO_PRINT_VALUES); 
+						printf("\n ATS Ip Address = %d.%d.%d.%d",data_read[3],data_read[2],data_read[1],data_read[0]); 
+						
+						//printf("\n status 0x20: %2.2x \n",(data_read[0]&0xFF)); 
 						printf("\n status 0x21: %2.2x \n",(data_read[1]&0xFF)); 
 						
-						MRd32(mem_addr_ats + 0x80, data_buffer, 256, 4, 1);//NO_PRINT_VALUES); 
+						printf("\n\n");
+						MRd32(mem_addr_ats + 0x80, data_buffer, 256, 4, NO_PRINT_VALUES);
 						
 						wait_to_continue();
 						break;
