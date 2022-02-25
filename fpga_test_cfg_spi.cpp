@@ -4628,9 +4628,9 @@ int main(int argc, char **argv)
 				case 65 : 
 					{
 						printf("Cmd_65: ATS pcie_bar_ats read\n");
-						printf("\n == ATS VERSION read==\n"); 
+						printf("\n == ATS VERSION read ==\n"); 
 						MRd32(mem_addr_ats + 0x24, data_read, 4, 4, NO_PRINT_VALUES); 
-						printf("\n version major: %2.2x \n",(data_read[0]&0xFF)); 
+						printf("\n version major: %2.2x",(data_read[0]&0xFF)); 
 						printf("\n version minor: %2.2x \n",(data_read[1]&0xFF)); 
 						printf("\n == ATS Status Enable Register ==\n"); 
 						MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 
