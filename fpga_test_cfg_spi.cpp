@@ -1940,6 +1940,7 @@ int main(int argc, char **argv)
 		uint32_t bufferSize = 0;
 		uint32_t i;
 		uint32_t getpci_sel;
+		uint32_t ats_sel;
 		// NVram variable
 		uint32_t nbanks;
 		uint32_t chipsize;
@@ -2040,7 +2041,7 @@ int main(int argc, char **argv)
 		printf("Cmd_62: SRAM Write Test from 0 to MAX size in Normal mode 64\n");
 		printf("Cmd_63: (TBD) SRAM Write Test from 0 to MAX size in Mirror mode 32\n");
 		printf("=============== ATS TEST ==================\n");
-		printf("Cmd_64: (TBD) ATS enable\n");
+		printf("Cmd_64: ATS enable\n");
 		printf("Cmd_65: ATS status read\n");
 		printf("=============== DIO TEST ==================\n");
 		printf("Cmd_66: DIN status\n");
@@ -4539,6 +4540,91 @@ int main(int argc, char **argv)
 						return 0;
 					}  	
 					
+				case 64 : 
+					{
+						
+						printf("-- =================================\n");
+						printf("--       ATS command                \n");		
+						printf("--  (1) ATS Hardware Reset          \n");
+						printf("--  (2) Enable ATS + DHCP + Trigger \n");
+						printf("--  (3) Enable ATS + DHCP           \n");
+						printf("--  (4) Enable Trigger              \n");
+						printf("--  (5) Disable All                 \n");
+						printf("-- =================================\n");
+						
+						
+						printf("Selection [1..4] ? : ");
+						if ((ret_code=scanf("%d", &ats_sel))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+												
+						switch(ats_sel)
+							{
+							case 1: 
+								
+								data_write[0]=0x80;
+								MWr32(mem_addr_ats + 0x21, data_write, 1, 1, NO_PRINT_VALUES); 	
+								usleep(2*100*1000);
+								data_write[0]=0x00;										
+								MWr32(mem_addr_ats + 0x21, data_write, 1, 1, NO_PRINT_VALUES); 	
+								break;
+
+							case 2: 
+									
+								data_write[0]=0x13;
+								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
+								break;
+
+							case 3: 
+													
+								MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 					
+								data_write[0]=data_read[0]+0x03;
+								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
+								break;
+
+							case 4:	
+													
+								MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 	
+								data_write[0]=data_read[0]+0x10;
+								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
+								break;
+								break;
+								
+							case 5:	
+								
+								data_write[0]=0x00;
+								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
+								break;
+
+								
+							default:
+								break;
+							}
+						
+						usleep(20*100*1000);
+
+						MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 
+						printf("\n ATS              = %s", ENABLE_ATS(data_read[0]&0x01));
+						printf("\n ATS DHCP         = %s", ENABLE_ATS_DHCP((data_read[0]>>1)&0x01));
+						printf("\n ATS IPV6         = %s", ENABLE_ATS_IPV6((data_read[0]>>1)&0x02));
+						printf("\n ATS VAR PACKET   = %s", ENABLE_ATS_VARIABLE_PACKET((data_read[0]>>3)&0x01));
+						printf("\n ATS TRIGGER      = %s", ENABLE_ATS_TRIGGER((data_read[0]>>4)&0x01));
+						
+						MRd32(mem_addr_ats + 0x08, data_read, 4, 4, NO_PRINT_VALUES); 
+						printf("\n ATS Ip Address   = %d.%d.%d.%d",data_read[3],data_read[2],data_read[1],data_read[0]); 
+						
+						MRd32(mem_addr_ats + 0x28, data_read, 6, 1, NO_PRINT_VALUES); 
+						printf("\n Physical Address = %2.2x-%2.2x-%2.2x-%2.2x-%2.2x-%2.2x",data_read[5],data_read[4],data_read[3],data_read[2],data_read[1],data_read[0]); 
+										
+						printf("\n\n");
+						MRd32(mem_addr_ats + 0x80, data_buffer, 256, 4, NO_PRINT_VALUES);
+							
+						wait_to_continue();
+						break;
+						return 0;
+					}  	
+						
 				case 65 : 
 					{
 						printf("Cmd_65: ATS pcie_bar_ats read\n");
@@ -4548,17 +4634,18 @@ int main(int argc, char **argv)
 						printf("\n version minor: %2.2x \n",(data_read[1]&0xFF)); 
 						printf("\n == ATS Status Enable Register ==\n"); 
 						MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 
-						printf("\n ATS \t\t= %s", ENABLE_ATS(data_read[0]&0x01));
-						printf("\n ATS DHCP \t= %s", ENABLE_ATS_DHCP((data_read[0]>>1)&0x01));
-						printf("\n ATS IPV6 \t= %s", ENABLE_ATS_IPV6((data_read[0]>>1)&0x02));
-						printf("\n ATS VAR PACKET = %s", ENABLE_ATS_VARIABLE_PACKET((data_read[0]>>3)&0x01));
-						printf("\n ATS TRIGGER \t= %s", ENABLE_ATS_TRIGGER((data_read[0]>>4)&0x01));
+						printf("\n ATS              = %s", ENABLE_ATS(data_read[0]&0x01));
+						printf("\n ATS DHCP         = %s", ENABLE_ATS_DHCP((data_read[0]>>1)&0x01));
+						printf("\n ATS IPV6         = %s", ENABLE_ATS_IPV6((data_read[0]>>1)&0x02));
+						printf("\n ATS VAR PACKET   = %s", ENABLE_ATS_VARIABLE_PACKET((data_read[0]>>3)&0x01));
+						printf("\n ATS TRIGGER      = %s", ENABLE_ATS_TRIGGER((data_read[0]>>4)&0x01));
 						
 						MRd32(mem_addr_ats + 0x08, data_read, 4, 4, NO_PRINT_VALUES); 
-						printf("\n ATS Ip Address = %d.%d.%d.%d",data_read[3],data_read[2],data_read[1],data_read[0]); 
+						printf("\n ATS Ip Address   = %d.%d.%d.%d",data_read[3],data_read[2],data_read[1],data_read[0]); 
 						
+						MRd32(mem_addr_ats + 0x28, data_read, 6, 1, NO_PRINT_VALUES); 
+						printf("\n Physical Address = %2.2x-%2.2x-%2.2x-%2.2x-%2.2x-%2.2x",data_read[5],data_read[4],data_read[3],data_read[2],data_read[1],data_read[0]); 
 						//printf("\n status 0x20: %2.2x \n",(data_read[0]&0xFF)); 
-						printf("\n status 0x21: %2.2x \n",(data_read[1]&0xFF)); 
 						
 						printf("\n\n");
 						MRd32(mem_addr_ats + 0x80, data_buffer, 256, 4, NO_PRINT_VALUES);
