@@ -4616,7 +4616,11 @@ int main(int argc, char **argv)
 						
 						MRd32(mem_addr_ats + 0x28, data_read, 6, 1, NO_PRINT_VALUES); 
 						printf("\n Physical Address = %2.2x-%2.2x-%2.2x-%2.2x-%2.2x-%2.2x",data_read[5],data_read[4],data_read[3],data_read[2],data_read[1],data_read[0]); 
-										
+						
+						MRd32(mem_addr_ats + 0x48, data_read, 32, 1, NO_PRINT_VALUES); 
+						printf("\n Host Name        = %c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c",data_read[0],data_read[1],data_read[2],data_read[3],data_read[4],data_read[5],data_read[6],data_read[7],data_read[8],data_read[9],data_read[10],data_read[11],data_read[12],data_read[13],data_read[14],data_read[15]); 
+						printf("%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c",data_read[16],data_read[17],data_read[18],data_read[19],data_read[20],data_read[21],data_read[22],data_read[23],data_read[24],data_read[25],data_read[26],data_read[27],data_read[28],data_read[29],data_read[30],data_read[31]); 
+						
 						printf("\n\n");
 						MRd32(mem_addr_ats + 0x80, data_buffer, 256, 4, NO_PRINT_VALUES);
 							
@@ -4646,6 +4650,9 @@ int main(int argc, char **argv)
 						MRd32(mem_addr_ats + 0x28, data_read, 6, 1, NO_PRINT_VALUES); 
 						printf("\n Physical Address = %2.2x-%2.2x-%2.2x-%2.2x-%2.2x-%2.2x",data_read[5],data_read[4],data_read[3],data_read[2],data_read[1],data_read[0]); 
 						//printf("\n status 0x20: %2.2x \n",(data_read[0]&0xFF)); 
+						MRd32(mem_addr_ats + 0x48, data_read, 32, 1, NO_PRINT_VALUES); 
+						printf("\n Host Name        = %c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c",data_read[0],data_read[1],data_read[2],data_read[3],data_read[4],data_read[5],data_read[6],data_read[7],data_read[8],data_read[9],data_read[10],data_read[11],data_read[12],data_read[13],data_read[14],data_read[15]); 
+						printf("%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c%c",data_read[16],data_read[17],data_read[18],data_read[19],data_read[20],data_read[21],data_read[22],data_read[23],data_read[24],data_read[25],data_read[26],data_read[27],data_read[28],data_read[29],data_read[30],data_read[31]); 
 						
 						printf("\n\n");
 						MRd32(mem_addr_ats + 0x80, data_buffer, 256, 4, NO_PRINT_VALUES);
