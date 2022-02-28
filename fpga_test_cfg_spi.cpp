@@ -2036,10 +2036,10 @@ int main(int argc, char **argv)
 		printf("Cmd_51: Test and verification Trace ID true jtag \n");
 		printf("Cmd_52: Test com port \n");		
 		printf("=============== SRAM TEST ==================\n");
-		printf("Cmd_60: SRAM Write Test from 0 to MAX size in Normal mode\n");
-		printf("Cmd_61: SRAM Write Test from 0 to MAX size in Mirror mode\n");
-		printf("Cmd_62: SRAM Write Test from 0 to MAX size in Normal mode 64\n");
-		printf("Cmd_63: (TBD) SRAM Write Test from 0 to MAX size in Mirror mode 32\n");
+		printf("Cmd_60: SRAM Write Test from 0 to MAX size in Normal mode (stress test for consumption)\n");
+		printf("Cmd_61: SRAM Write Test from 0 to MAX size in Mirror mode (stress test for consumption)\n");
+		printf("Cmd_62: SRAM Write Test and Read back/verify from 0 to MAX size in Normal mode 64\n");
+		printf("Cmd_63: SRAM Write Read access\n");
 		printf("=============== ATS TEST ==================\n");
 		printf("Cmd_64: ATS enable\n");
 		printf("Cmd_65: ATS status read\n");
@@ -4462,7 +4462,7 @@ int main(int argc, char **argv)
 																		
 								if (sram_test==0)  
 									{
-										if (!bufferSize) bufferSize = nvramMaxSize;  
+										bufferSize = nvramMaxSize;  
 									}	
 								else if (sram_test==1)  
 									{
@@ -4501,7 +4501,7 @@ int main(int argc, char **argv)
 										printf("\n\n === request number of iteration %d===\n",number_of_iteration);
 									}; 
 									#endif 
-									i = 0;
+									i = 0;    //8388608
 									while (i < bufferSize)
 										{
 											MWr32(mem_addr+i, &writeBuffer[i], sram_access_type, sram_access_type, NO_PRINT_VALUES); 
@@ -4515,6 +4515,7 @@ int main(int argc, char **argv)
 											
 											for(j = i; j < (i+sram_access_type); j++)
 											{
+												//if (j<256) printf("\n Error at address %d: Expected: 0x%2.2x got: 0x%2.2x\n",j,writeBuffer[j]&0xff,readBuffer[j]&0xff); 
 												if ((writeBuffer[j]!=readBuffer[j]) && j<256) printf("\n Error at address %d: Expected: 0x%2.2x got: 0x%2.2x\n",j,writeBuffer[j]&0xff,readBuffer[j]&0xff); 
 											}
 											i += sram_access_type;		
@@ -4534,6 +4535,315 @@ int main(int argc, char **argv)
 						
 						free(writeBuffer);
 						free(readBuffer);
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}  	
+
+				case 63 : 
+					{
+						#if _DEBUG	
+						{	
+							printf("\n\n === max ram size %d ===",nvramMaxSize);
+							printf("\n\n === max ram size %d===",pcie_bar_size_mem[0]);
+						}; 
+						#endif 
+						
+						printf("\n\n");
+						IORd(pcie_bar_mem[1] + 0x14, data_read, 2, 1, NO_PRINT_VALUES); 
+						printf("\n ===================================");
+						printf("\n === SRAM MODULE (HW parameters) ===");
+						printf("\n =====      Version %2.2x.%2.2x      =====",data_read[0]&0xff,data_read[1]&0xff); 
+						#if _DEBUG	
+						{	
+							printf("\n\n === MODE REGISTER READ ===");
+							IORd(pcie_bar_mem[1] + 0x0C, data_read, 1, 1, 1);
+						}; 
+						#endif 
+						data_write[0]=NORMAL_MODEx64;
+						IOWr(pcie_bar_mem[1] + 0x0C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						// enable all bank
+						data_write[0]=0x0F;
+						IOWr(pcie_bar_mem[1] + 0x0D, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						#if _DEBUG	
+						{	
+							printf("\n\n === MODE REGISTER READ ===");
+							IORd(pcie_bar_mem[1] + 0x0C, data_read, 1, 1, 1);//NO_PRINT_VALUES);
+						}; 						
+						#endif 
+						
+						// check Autentication Status			
+						IORd(pcie_bar_io[0] + 0x20, data_read, 1, 1, NO_PRINT_VALUES);
+						printf("\n Authentication status: %s \n",AUTHENTICA(data_read[0]&0x01)); 
+						
+						
+						// enable all bank
+						data_write[0]=0x0F;
+						IOWr(pcie_bar_mem[1] + 0x0D, data_write, 1, 1, 0, NO_PRINT_VALUES);
+						
+						uint32_t sram_waccess_type,sram_raccess_type;
+						uint32_t nvram_sel;
+						
+						uint8_t *writeBuffer;
+						uint8_t *readBuffer;
+						uint32_t sram_mode_num;
+						
+						uint32_t x;
+						uint32_t i;
+						uint32_t test_size;
+						uint32_t j;	
+						uint32_t data_type;
+						
+						printf("-- =================================\n");
+						printf("--       SRAM command               \n");		
+						printf("--  (1) Write Access                \n");
+						printf("--  (2) Read Access                 \n");
+						printf("--  (3) Change SRAM Mode Access     \n");
+						printf("--  (4) Exit                        \n");
+						printf("-- =================================\n");
+						
+						
+						printf("Selection [1..4] ? : ");
+						if ((ret_code=scanf("%d", &nvram_sel))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+						
+						switch(nvram_sel)
+						{
+							case 1:
+								{				
+									bufferSize = nvramMaxSize;   // temp	
+									
+									writeBuffer = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
+									
+									printf("\n\n Insert Type SRAM acces 1 = byte, 2 = word, 4 = dword, 8 = qword: ");
+									if ((ret_code=scanf("%d", &sram_waccess_type))!=1)
+									{
+										printf("function read error %d\n",ret_code);
+									};
+									switch(sram_waccess_type)
+									{
+										case 1:
+										case 2:
+										case 4:
+										case 8:
+										{	
+											break;
+										}
+										default:
+										{	
+											sram_waccess_type = 8;
+											break;
+										}  
+									} 
+									
+									printf("\n\n How many byte to write ? [0..%d]: ",bufferSize);
+									if ((ret_code=scanf("%d", &test_size))!=1)
+									{
+										printf("function read error %d\n",ret_code);
+									};
+									
+									// max write byte size is Memory max size
+									if (test_size > bufferSize) test_size=bufferSize;
+									
+									printf("-- =====================\n");
+									printf("--     Data Type        \n");		
+									printf("--  (1) 0xFF            \n");
+									printf("--  (2) 0x00            \n");
+									printf("--  (3) Consecutive     \n");
+									printf("--  (4) Random          \n");
+									printf("-- =====================\n");
+						
+									printf("\n\n Data Type ? [1..4]: ");
+									if ((ret_code=scanf("%d", &data_type))!=1)
+									{
+										printf("function read error %d\n",ret_code);
+									};
+									
+									switch(data_type)
+									{
+										case 1:
+											{
+												printf("Assigning 0xFF values to a %u bytes local buffer...\n", test_size);
+												for (x = 0; x < test_size; x++)
+												*(writeBuffer + x) = (uint8_t)(0xFF);
+												break;
+											}
+										case 2:
+											{
+												printf("Assigning 0x00 values to a %u bytes local buffer...\n", test_size);
+												for (x = 0; x < test_size; x++)
+												*(writeBuffer + x) = (uint8_t)(0x00);
+												break;
+											}
+										case 3:
+											{	
+												printf("Assigning consecutive values to a %u bytes local buffer...\n", test_size);
+												for (x = 0; x < test_size; x++)
+												*(writeBuffer + x) = (uint8_t)(x);
+												break;
+											}  
+										case 4:
+											{	
+												printf("Assigning random values to a %u bytes local buffer...\n", test_size);
+												for (x = 0; x < test_size; x++)
+												*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
+												break;
+											}  
+										default:
+											{	
+												printf("Assigning random values to a %u bytes local buffer...\n", test_size);
+												for (x = 0; x < test_size; x++)
+												*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
+												break;
+											}  
+									} 
+																		
+									#if _DEBUG	
+									{	
+										printf("\n\n === write access size %d ===",sram_waccess_type);
+										printf("\n\n === %u bytes buffer ram===", bufferSize);
+										printf("\n\n === %u bytes test size===", test_size);
+										printf("\n\n === data type %d===\n",data_type);
+									}; 
+									#endif 
+									
+									i = 0;
+									while (i < test_size)
+										{
+											MWr32(mem_addr+i, &writeBuffer[i], sram_waccess_type, sram_waccess_type, NO_PRINT_VALUES); 
+											i += sram_waccess_type;		
+										}
+									
+									
+								free(writeBuffer);
+								break;
+								} 
+							case 2:
+								{
+									bufferSize = nvramMaxSize;   // temp
+									
+									readBuffer = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
+									
+									printf("\n\n Insert Type SRAM acces 1 = byte, 2 = word, 4 = dword, 8 = qword: ");
+									if ((ret_code=scanf("%d", &sram_raccess_type))!=1)
+									{
+										printf("function read error %d\n",ret_code);
+									};
+									switch(sram_raccess_type)
+									{
+										case 1:
+										case 2:
+										case 4:
+										case 8:
+										{	
+											break;
+										}
+										default:
+										{	
+											sram_raccess_type = 8;
+											break;
+										}  
+									} 
+												
+									
+									printf("\n\n How many byte to read ? [0..%d]: ",bufferSize);
+									if ((ret_code=scanf("%d", &test_size))!=1)
+									{
+										printf("function read error %d\n",ret_code);
+									};
+									
+									// max write byte size is Memory max size
+									if (test_size > bufferSize) test_size=bufferSize;
+									
+									#if _DEBUG	
+									{	
+										printf("\n\n === read access size %d ===",sram_raccess_type);
+										printf("\n\n === %u bytes buffer ram===", bufferSize);
+										printf("\n\n === %u bytes test size===", test_size);
+										printf("\n\n === data type %d===\n",data_type);
+									}; 
+									#endif 
+									
+									i = 0;
+									while (i < test_size)
+										{
+											MRd32(mem_addr+i, &readBuffer[i], sram_raccess_type, sram_raccess_type, 1);//NO_PRINT_VALUES);
+											
+											/*for(j = i; j < (i+sram_access_type); j++)
+											{
+												if ((writeBuffer[j]!=readBuffer[j]) && j<256) printf("\n Error at address %d: Expected: 0x%2.2x got: 0x%2.2x\n",j,writeBuffer[j]&0xff,readBuffer[j]&0xff); 
+											}*/
+											i += sram_raccess_type;		
+		  
+										}
+										 
+								free(readBuffer);
+								break;
+								} 
+							case 3:
+								{	
+									printf("-- =================================\n");
+									printf("--       SRAM MODE                  \n");		
+									printf("--  (1) NORMAL_MODEx64              \n");
+									printf("--  (2) NORMAL_MODE                 \n");
+									printf("--  (3) MIRROR_MODEx32              \n");
+									printf("--  (4) MIRROR_MODE                 \n");
+									printf("-- =================================\n");
+						
+									printf("\n\n Insert SRAM mode acces [1..4]: ");
+									if ((ret_code=scanf("%d", &sram_mode_num))!=1)
+									{
+										printf("function read error %d\n",ret_code);
+									};
+									
+									data_write[0]=NORMAL_MODEx64;
+									data_write[1]=NORMAL_MODE;
+									data_write[2]=MIRROR_MODEx32;
+									data_write[3]=MIRROR_MODE;
+									// write sram mode
+									IOWr(pcie_bar_mem[1] + 0x0C, data_write, 1, 1, (sram_mode_num-1), NO_PRINT_VALUES); 
+								
+									switch(sram_mode_num)
+									{
+										case 1:
+											{
+												bufferSize = nvramMaxSize; 	
+												break;
+											}
+										case 2:
+											{
+												bufferSize = (nvramMaxSize/2); 
+												break;
+											}
+										case 3:
+											{
+												bufferSize = (nvramMaxSize/2); 
+												break;
+											}
+										case 4:
+											{	
+												bufferSize = (nvramMaxSize/4);  
+												break;
+											}
+										default:
+										{	
+											break;
+										}  
+									} 
+								break;
+								}
+							case 4:
+								{	
+									break;
+								}
+							default:
+								{	
+									break;
+								}  
+						} 						
 						
 						wait_to_continue();
 						break;
