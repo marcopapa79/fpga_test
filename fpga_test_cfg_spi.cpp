@@ -4482,6 +4482,7 @@ int main(int argc, char **argv)
 								
 								
 								printf("Assigning random values to a %u bytes local buffer...\n", bufferSize);
+								srand(time(NULL)); //INIZIALIZZA LA GENERAZIONE DI VALORI CASUALI
 								for (x = 0; x < bufferSize; x++)
 									//*(writeBuffer + x) = (uint8_t)(x & 0x000000FF);
 									*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
@@ -4687,6 +4688,7 @@ int main(int argc, char **argv)
 											}  
 										case 4:
 											{	
+												srand(time(NULL)); //INIZIALIZZA LA GENERAZIONE DI VALORI CASUALI
 												printf("Assigning random values to a %u bytes local buffer...\n", test_size);
 												for (x = 0; x < test_size; x++)
 												*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
