@@ -51,6 +51,8 @@
 #include <string.h>
 #include <cmath>
 
+#include <asm/termbits.h>
+
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -59,7 +61,6 @@
 #include <sys/mman.h>
 #include <stdint.h>
 #include <sys/ioctl.h>
-#include <termios.h>
 #include <inttypes.h>
 #include <pthread.h>
 #include "openssl/evp.h"
@@ -209,6 +210,8 @@ uint32_t sizeSecsBuffer = 32*16;
 #define ENABLE_ATS_IPV6(x)((x) == 1?"ATS_IPV6_ENABLED":"ATS_IPV6_DISABLED")
 #define ENABLE_ATS_VARIABLE_PACKET(x)((x) == 1?"VARIABLE_PACKET_ENABLED":"VARIABLE_PACKET_DISABLED")
 #define ENABLE_ATS_TRIGGER(x)((x) == 1?"ATS_TRIGGER_ENABLED":"ATS_TRIGGER_DISABLED")
+#define ENABLE_ATS_LOOP(x)((x) == 1?"ATS_INTERNAL_LOOP_ENABLED":"ATS_INTERNAL_LOOP_DISABLED")
+
 
 /*====================================
 = Pointer Declaration of PCIe BARs =*/
@@ -227,7 +230,85 @@ uint32_t *pcie_bar_size_qli   = NULL;
 uint32_t *pcie_bar_size_sbc   = NULL;
 uint32_t *pcie_bar_size_ats   = NULL;
 /*==================================*/
-
+		/* 
+		 * ===  FUNCTION  ======================================================================
+		 *         Name:  serial_open
+		 *  Description:  open serial port, 
+		 *  Requiremets:  
+		 *                buffer = pointer of buffer
+		 * =====================================================================================
+		 */
+		 
+		int serial_open(const char * serial_port)  
+		{
+			int fd = open(serial_port, O_RDWR | O_NOCTTY | O_SYNC);
+			if (fd != -1) {
+				
+				// Serial port setup
+						
+				int speed = 115200;//3000000;
+				struct termios2 term2;
+				int n = ioctl(fd, TCGETS2, &term2);
+				if (n == 0) {
+					term2.c_cflag = (term2.c_cflag & ~CSIZE) | CS8; // 8-bit chars 
+					term2.c_iflag &= ~IGNBRK;                       // disable break processing 
+					term2.c_lflag = 0;                              // no signaling chars, no echo, no canonical processing 
+					term2.c_oflag = 0;                              // no remapping, no delays 
+					term2.c_cc[VMIN]  = 0;                          // read doesn't block 
+					term2.c_cc[VTIME] = 1;                          // 0.5 seconds read timeout 
+					term2.c_iflag &= ~(IXON | IXOFF | IXANY);       // shut off xon/xoff ctrl 
+					term2.c_cflag |= (CLOCAL | CREAD);              // ignore modem controls, enable reading 
+					term2.c_cflag &= ~(PARENB | PARODD);            // shut off parity 
+					term2.c_cflag &= ~CBAUD;                        // Remove current BAUD rate 
+					term2.c_cflag |= BOTHER;                        // Allow custom BAUD rate using int input 
+					term2.c_ispeed = speed;                         // Set the input BAUD rate 
+					term2.c_ospeed = speed;                         // Set the output BAUD rate 
+					n = ioctl(fd, TCSETS2, &term2);
+					if (n == 0) {
+						return fd;
+					}
+					else {
+						perror("TCSETS"); 
+						close(fd);
+						return -1;
+					}
+				}
+				else {
+					perror("TCGETS"); 
+					close(fd);
+					return -1;
+				}
+			}
+			perror("open");
+			return -1;
+		}
+		/*
+		//Open Serial Port   
+		int open_port(const char * serial_port)   
+		{   
+			int fd = open(serial_port, O_RDWR | O_NOCTTY | O_SYNC);
+						
+			fd = open( "/dev/ttyS4", O_RDWR|O_NOCTTY|O_NDELAY);   
+			if (-1 == fd)  
+			{   
+				perror("Can't Open Serial Port");   
+				return(-1);   
+			}  
+				
+			//Restoring Serial Port to Blocking State   
+			if(fcntl(fd, F_SETFL, 0)<0)   
+					printf("fcntl failed!\n");   
+			else   
+			printf("fcntl=%d\n",fcntl(fd, F_SETFL,0));   
+			//Test whether it is a terminal device   
+			if(isatty(STDIN_FILENO)==0)   
+				printf("standard input is not a terminal device\n");   
+			else   
+				printf("isatty success!\n");   
+			printf("fd-open=%d\n",fd);   
+			return fd;   
+		}  
+			*/
 		/*
 		 * =====================================================================================
 		 *         Type:  aes_mode_t
@@ -244,7 +325,6 @@ uint32_t *pcie_bar_size_ats   = NULL;
 		 * =====================================================================================
 		 */
 		typedef enum {AES_128, AES_256} aes_size_t;
-		/* 
 		
 		/* 
 		 * ===  FUNCTION  ======================================================================
@@ -2043,9 +2123,10 @@ int main(int argc, char **argv)
 		printf("=============== ATS TEST ==================\n");
 		printf("Cmd_64: ATS enable\n");
 		printf("Cmd_65: ATS status read\n");
+		printf("Cmd_66: ATS com command check\n");
 		printf("=============== DIO TEST ==================\n");
-		printf("Cmd_66: DIN status\n");
-		printf("Cmd_67: DIN interrupt test\n");
+		printf("Cmd_70: DIN status\n");
+		printf("Cmd_71: DIN interrupt test\n");
 		printf("=============== PCIe utility ==================\n");
 		printf("Cmd_99: Get PCIe status/Enable PCIe/Set command reg\n");
 	
@@ -4482,7 +4563,6 @@ int main(int argc, char **argv)
 								
 								
 								printf("Assigning random values to a %u bytes local buffer...\n", bufferSize);
-								srand(time(NULL)); //INIZIALIZZA LA GENERAZIONE DI VALORI CASUALI
 								for (x = 0; x < bufferSize; x++)
 									//*(writeBuffer + x) = (uint8_t)(x & 0x000000FF);
 									*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
@@ -4688,7 +4768,6 @@ int main(int argc, char **argv)
 											}  
 										case 4:
 											{	
-												srand(time(NULL)); //INIZIALIZZA LA GENERAZIONE DI VALORI CASUALI
 												printf("Assigning random values to a %u bytes local buffer...\n", test_size);
 												for (x = 0; x < test_size; x++)
 												*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
@@ -4861,11 +4940,12 @@ int main(int argc, char **argv)
 						printf("--  (2) Enable ATS + DHCP + Trigger \n");
 						printf("--  (3) Enable ATS + DHCP           \n");
 						printf("--  (4) Enable Trigger              \n");
-						printf("--  (5) Disable All                 \n");
+						printf("--  (5) Enable ATS internal loop    \n");
+						printf("--  (6) Disable All                 \n");
 						printf("-- =================================\n");
 						
 						
-						printf("Selection [1..4] ? : ");
+						printf("Selection [1..6] ? : ");
 						if ((ret_code=scanf("%d", &ats_sel))!=1)
 						{
 							printf("function read error %d\n",ret_code);
@@ -4901,9 +4981,15 @@ int main(int argc, char **argv)
 								data_write[0]=data_read[0]+0x10;
 								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
 								break;
-								break;
 								
 							case 5:	
+							
+								MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 					
+								data_write[0]=0x21;
+								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
+								break;
+								
+							case 6:	
 								
 								data_write[0]=0x00;
 								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
@@ -4917,11 +5003,12 @@ int main(int argc, char **argv)
 						usleep(20*100*1000);
 
 						MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 
-						printf("\n ATS              = %s", ENABLE_ATS(data_read[0]&0x01));
-						printf("\n ATS DHCP         = %s", ENABLE_ATS_DHCP((data_read[0]>>1)&0x01));
-						printf("\n ATS IPV6         = %s", ENABLE_ATS_IPV6((data_read[0]>>1)&0x02));
-						printf("\n ATS VAR PACKET   = %s", ENABLE_ATS_VARIABLE_PACKET((data_read[0]>>3)&0x01));
-						printf("\n ATS TRIGGER      = %s", ENABLE_ATS_TRIGGER((data_read[0]>>4)&0x01));
+						printf("\n ATS               = %s", ENABLE_ATS(data_read[0]&0x01));
+						printf("\n ATS DHCP          = %s", ENABLE_ATS_DHCP((data_read[0]>>1)&0x01));
+						printf("\n ATS IPV6          = %s", ENABLE_ATS_IPV6((data_read[0]>>1)&0x02));
+						printf("\n ATS VAR PACKET    = %s", ENABLE_ATS_VARIABLE_PACKET((data_read[0]>>3)&0x01));
+						printf("\n ATS TRIGGER       = %s", ENABLE_ATS_TRIGGER((data_read[0]>>4)&0x01));
+						printf("\n ATS INTERNAL LOOP = %s", ENABLE_ATS_LOOP((data_read[0]>>5)&0x01));
 						
 						MRd32(mem_addr_ats + 0x08, data_read, 4, 4, NO_PRINT_VALUES); 
 						printf("\n ATS Ip Address   = %d.%d.%d.%d",data_read[3],data_read[2],data_read[1],data_read[0]); 
@@ -4950,11 +5037,12 @@ int main(int argc, char **argv)
 						printf("\n version minor: %2.2x \n",(data_read[1]&0xFF)); 
 						printf("\n == ATS Status Enable Register ==\n"); 
 						MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 
-						printf("\n ATS              = %s", ENABLE_ATS(data_read[0]&0x01));
-						printf("\n ATS DHCP         = %s", ENABLE_ATS_DHCP((data_read[0]>>1)&0x01));
-						printf("\n ATS IPV6         = %s", ENABLE_ATS_IPV6((data_read[0]>>1)&0x02));
-						printf("\n ATS VAR PACKET   = %s", ENABLE_ATS_VARIABLE_PACKET((data_read[0]>>3)&0x01));
-						printf("\n ATS TRIGGER      = %s", ENABLE_ATS_TRIGGER((data_read[0]>>4)&0x01));
+						printf("\n ATS               = %s", ENABLE_ATS(data_read[0]&0x01));
+						printf("\n ATS DHCP          = %s", ENABLE_ATS_DHCP((data_read[0]>>1)&0x01));
+						printf("\n ATS IPV6          = %s", ENABLE_ATS_IPV6((data_read[0]>>1)&0x02));
+						printf("\n ATS VAR PACKET    = %s", ENABLE_ATS_VARIABLE_PACKET((data_read[0]>>3)&0x01));
+						printf("\n ATS TRIGGER       = %s", ENABLE_ATS_TRIGGER((data_read[0]>>4)&0x01));
+						printf("\n ATS INTERNAL LOOP = %s", ENABLE_ATS_LOOP((data_read[0]>>5)&0x01));
 						
 						MRd32(mem_addr_ats + 0x08, data_read, 4, 4, NO_PRINT_VALUES); 
 						printf("\n ATS Ip Address   = %d.%d.%d.%d",data_read[3],data_read[2],data_read[1],data_read[0]); 
@@ -4974,7 +5062,50 @@ int main(int argc, char **argv)
 						return 0;
 					}  	
 					
+					
 				case 66 : 
+					{
+							
+						
+						printf("-- ============================\n");
+						printf("-- Serial Port Open /dev/ttyS0 \n");	
+						printf("-- ============================\n");
+						//printf("\n Serial Port Open /dev/ttyS5\n"); 
+						//int fd=open_port("/dev/ttyS4");
+						int fd1=serial_open("/dev/ttyS0");
+							
+						data_write[0] = 0x40; 
+						data_write[1] = 0x40;  
+						data_write[2] = 0x01; 	
+						data_write[3] = 0x04; 	
+						data_write[4] = 0x04; 	
+						data_write[5] = 0x04; 	
+						data_write[6] = 0x04; 	
+						data_write[7] = 0x04; 							
+                        		
+						if ((ret_code=write(fd1,data_write,1))==-1) 
+						{
+							perror(NULL);
+						};
+						printf("\n Return code write = %d",ret_code); 	
+						
+						if ((ret_code=read(fd1,data_read,sizeof(data_read)))==-1) 
+						{
+							perror(NULL);
+						}; 
+						printf("\n Return code read = %d",ret_code); 						
+											
+						printf("\n Status  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+						printf("\n Status  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[7]&0xff,data_read[6]&0xff,data_read[5]&0xff,data_read[4]&0xff); 
+						printf("\n Status  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[11]&0xff,data_read[10]&0xff,data_read[9]&0xff,data_read[8]&0xff); 
+						printf("\n Status  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[15]&0xff,data_read[14]&0xff,data_read[13]&0xff,data_read[12]&0xff); 
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}  	
+							
+				case 70 : 
 					{
 						
 						
@@ -4993,7 +5124,7 @@ int main(int argc, char **argv)
 					}  	
 						
 			
-				case 67 : 
+				case 71 : 
 					{
 						// disable debounce
 						data_write[0] = 0x00; 
