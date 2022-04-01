@@ -211,6 +211,7 @@ uint32_t sizeSecsBuffer = 32*16;
 #define ENABLE_ATS_VARIABLE_PACKET(x)((x) == 1?"VARIABLE_PACKET_ENABLED":"VARIABLE_PACKET_DISABLED")
 #define ENABLE_ATS_TRIGGER(x)((x) == 1?"ATS_TRIGGER_ENABLED":"ATS_TRIGGER_DISABLED")
 #define ENABLE_ATS_LOOP(x)((x) == 1?"ATS_INTERNAL_LOOP_ENABLED":"ATS_INTERNAL_LOOP_DISABLED")
+#define DISABLE_ATS_SYNC(x)((x) == 1?"ATS_SYNC_DISABLED":"ATS_SYNC_ENABLED")
 
 
 /*====================================
@@ -4941,7 +4942,9 @@ int main(int argc, char **argv)
 						printf("--  (3) Enable ATS + DHCP           \n");
 						printf("--  (4) Enable Trigger              \n");
 						printf("--  (5) Enable ATS internal loop    \n");
-						printf("--  (6) Disable All                 \n");
+						printf("--  (6) Enaable ATS internal loop   \n");
+						printf("--      disable sync message 0xCC   \n");
+						printf("--  (7) Disable All                 \n");
 						printf("-- =================================\n");
 						
 						
@@ -4984,12 +4987,19 @@ int main(int argc, char **argv)
 								
 							case 5:	
 							
-								MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 					
+								//MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 					
 								data_write[0]=0x21;
 								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
 								break;
 								
 							case 6:	
+							
+								MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 					
+								data_write[0]=0x61;
+								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
+								break;
+								
+							case 7:	
 								
 								data_write[0]=0x00;
 								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
@@ -5009,6 +5019,7 @@ int main(int argc, char **argv)
 						printf("\n ATS VAR PACKET    = %s", ENABLE_ATS_VARIABLE_PACKET((data_read[0]>>3)&0x01));
 						printf("\n ATS TRIGGER       = %s", ENABLE_ATS_TRIGGER((data_read[0]>>4)&0x01));
 						printf("\n ATS INTERNAL LOOP = %s", ENABLE_ATS_LOOP((data_read[0]>>5)&0x01));
+						printf("\n ATS SYNC SIGNAL   = %s", DISABLE_ATS_SYNC((data_read[0]>>6)&0x01));
 						
 						MRd32(mem_addr_ats + 0x08, data_read, 4, 4, NO_PRINT_VALUES); 
 						printf("\n ATS Ip Address   = %d.%d.%d.%d",data_read[3],data_read[2],data_read[1],data_read[0]); 
@@ -5043,6 +5054,7 @@ int main(int argc, char **argv)
 						printf("\n ATS VAR PACKET    = %s", ENABLE_ATS_VARIABLE_PACKET((data_read[0]>>3)&0x01));
 						printf("\n ATS TRIGGER       = %s", ENABLE_ATS_TRIGGER((data_read[0]>>4)&0x01));
 						printf("\n ATS INTERNAL LOOP = %s", ENABLE_ATS_LOOP((data_read[0]>>5)&0x01));
+						printf("\n ATS SYNC SIGNAL   = %s", DISABLE_ATS_SYNC((data_read[0]>>6)&0x01));
 						
 						MRd32(mem_addr_ats + 0x08, data_read, 4, 4, NO_PRINT_VALUES); 
 						printf("\n ATS Ip Address   = %d.%d.%d.%d",data_read[3],data_read[2],data_read[1],data_read[0]); 
@@ -5065,7 +5077,7 @@ int main(int argc, char **argv)
 					
 				case 66 : 
 					{
-							
+						
 						
 						printf("-- ============================\n");
 						printf("-- Serial Port Open /dev/ttyS0 \n");	
@@ -5082,7 +5094,28 @@ int main(int argc, char **argv)
 						data_write[5] = 0x04; 	
 						data_write[6] = 0x04; 	
 						data_write[7] = 0x04; 							
-                        		
+                        	
+						
+						if ((ret_code=write(fd1,data_write,1))==-1) 
+						{
+							perror(NULL);
+						};
+						printf("\n Return code write = %d",ret_code); 	
+						
+						
+						while ((ret_code=read(fd1,data_read,sizeof(data_read))) > 0) 
+						{
+							printf("\n Status  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							printf("\n Status  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[7]&0xff,data_read[6]&0xff,data_read[5]&0xff,data_read[4]&0xff); 
+								
+						};
+						/*
+						if ((ret_code=read(fd1,data_read,sizeof(data_read)))==-1) 
+						{
+							perror(NULL);
+						}; 
+						printf("\n Return code read = %d",ret_code);
+							*/
 						if ((ret_code=write(fd1,data_write,1))==-1) 
 						{
 							perror(NULL);
@@ -5100,6 +5133,7 @@ int main(int argc, char **argv)
 						printf("\n Status  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[11]&0xff,data_read[10]&0xff,data_read[9]&0xff,data_read[8]&0xff); 
 						printf("\n Status  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[15]&0xff,data_read[14]&0xff,data_read[13]&0xff,data_read[12]&0xff); 
 						
+						close(fd1);
 						wait_to_continue();
 						break;
 						return 0;
