@@ -169,8 +169,8 @@
 //       Date
 
 uint8_t ver_major = 1;
-uint8_t ver_minor = 10;
-char date[]="15/02/2022";
+uint8_t ver_minor = 11;
+char date[]="06/04/2022";
 
 /*===========================*/
 
@@ -319,17 +319,16 @@ uint32_t *pcie_bar_size_ats   = NULL;
 		 *                buffer = pointer of serial
 		 * =====================================================================================
 		 */
-		void * ats_wait_cmd_ack(uint8_t * data_rd, int fd1,uint8_t cmd)  
+		void ats_wait_cmd_ack(uint8_t * data_rd, int fd1,uint8_t cmd)  
 		{					
 			do
 			{
 				read(fd1,data_rd,1);
-				printf("0x%2.2x",data_rd[0]&0xff);
-				/*if (memcmp(data_rd,"\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xd4",8)==0)
+				if (memcmp(data_rd,"\xd4\xdd\xdd\xdd\xdd\xdd\xdd\xdd",8)==0)
 				{
 					printf("\n*** Command 0x04 acknoledge received \n");	
 					break;									
-				};*/
+				};
 				data_rd[7]=data_rd[6];						
 				data_rd[6]=data_rd[5];							
 				data_rd[5]=data_rd[4];								
@@ -341,7 +340,7 @@ uint32_t *pcie_bar_size_ats   = NULL;
 			}
 			while (1); 
 			
-			return data_rd;
+			//return data_rd;
 		}
 		
 		/* 
@@ -374,6 +373,36 @@ uint32_t *pcie_bar_size_ats   = NULL;
 			while (1); 
 			
 		}
+		
+		/* 
+		 * ===  FUNCTION  ======================================================================
+		 *         Name:  read_debug_response
+		 *  Description:  debug serial response
+		 *  Requiremets:  
+		 *                buffer = pointer of serial
+		 * =====================================================================================
+		 */
+		void * read_debug_response(uint8_t * data_rd, int fd1, uint32_t length, unsigned int debug_print)
+		
+		{		
+			int ret_code;
+			uint8_t *debug_response = (uint8_t *)calloc (length,sizeof(uint8_t));
+			uint32_t i;						
+			
+			for(i = 0; i < length; i++)
+			{		
+				if ((ret_code=read(fd1,data_rd,1))>0)  //read(fd1,data_rd,1);
+				debug_response[i]=data_rd[0];				
+				if (debug_print == 1) printf("0x%2.2x ",data_rd[0]&0xff); 	
+			}; 						
+								
+			for(i = 0; i < length; i++)
+			{		
+				*(data_rd+i) = *(debug_response+i);
+			}; 
+			free(debug_response);
+			return data_rd;
+		}			
 							
 		/*
 		 * =====================================================================================
@@ -2186,10 +2215,11 @@ int main(int argc, char **argv)
 		printf("Cmd_61: SRAM Write Test from 0 to MAX size in Mirror mode (stress test for consumption)\n");
 		printf("Cmd_62: SRAM Write Test and Read back/verify from 0 to MAX size in Normal mode 64\n");
 		printf("Cmd_63: SRAM Write Read access\n");
-		printf("=============== ATS TEST ==================\n");
-		printf("Cmd_64: ATS enable\n");
-		printf("Cmd_65: ATS status read\n");
-		printf("Cmd_66: ATS com command check\n");
+		printf("=============== DEBUG TEST ==================\n");
+		printf("Cmd_64: DEBUG enable\n");
+		printf("Cmd_65: DEBUG status read\n");
+		printf("Cmd_66: DEBUG serial command check\n");
+		printf("Cmd_67: DEBUG serial basic test\n");
 		printf("=============== DIO TEST ==================\n");
 		printf("Cmd_70: DIN status\n");
 		printf("Cmd_71: DIN interrupt test\n");
@@ -5216,11 +5246,11 @@ int main(int argc, char **argv)
 						printf("-- internal loop mode \n");	
 						printf("-- ===================\n");						
 												
-						printf("\n*** Enable ATS and set internal loop mode ***\n");	
+						printf("\n*** Enable ATS and set internal loop mode \n");	
 						data_write[0]=0x21;
 						MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
 						
-						printf("\n*** Serial Port Open /dev/ttyS0 ***\n");	
+						printf("\n*** Serial Port Open /dev/ttyS0 \n");	
 						int fd1=serial_open("/dev/ttyS0");
 							
 						ats_wait_for_sync(data_read,fd1);		
@@ -5231,40 +5261,18 @@ int main(int argc, char **argv)
 						{
 							perror(NULL);
 						};
-						//printf("\n Return code write = %d",ret_code); 
-						printf("\n*** Sent Status Command ***\n");		
-								/*														
-								
-								while (1); //((ret_code=read(fd1,data_read,1)) > 0) &&
-								*/
-						//ats_wait_cmd_ack(data_read,fd1,data_write[0]);
+						printf("\n*** Sent Status Command 0x04 \n");		
 						
-						if ((ret_code=read(fd1,data_read,sizeof(data_read)))==-1) 
-						{
-							perror(NULL);
-						}; 
-								printf("\n Return code read = %d",ret_code); 						
-								
-									printf("\n Status  = ");
-									for(int i = 0; i < ret_code; i++)
-									{												
-										printf("0x%2.2x ",data_read[i]&0xff); 
-									};
-									printf("\n"); 
-													
-								while ((ret_code=read(fd1,data_read,sizeof(data_read))) > 0) 
-								{
-									printf("\n Status  = ");
-									for(int i = 0; i < ret_code; i++)
-									{												
-										printf("0x%2.2x ",data_read[i]&0xff); 
-										if ((data_read[i]&0xff==0xdd)) //(data_read[i]&0xff==0xcc) || 
-											{
-												printf("****************** GOT IT *************************");													
-											};
-									};
-									printf("\n"); 	
-								};
+						ats_wait_cmd_ack(data_read,fd1,data_write[0]);						
+						read_debug_response(data_read,fd1,60, NO_PRINT_VALUES);//PRINT_VALUES);//NO_PRINT_VALUES);
+						
+						printf("-- ============================\n");
+						printf("*** STAUTS parameter ***\n");
+						printf("*** DEBUG Version 0x%2.2x \n",data_read[0]);
+						printf("*** DEBUG module Mask 0x%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x",data_read[1],data_read[2],data_read[3],data_read[4],data_read[5],data_read[6],data_read[7],data_read[8]);
+						printf(".%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x \n",data_read[9],data_read[10],data_read[11],data_read[12],data_read[13],data_read[14],data_read[15],data_read[16]);
+						printf("*** %2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x \n",data_read[17],data_read[18],data_read[19],data_read[20],data_read[21],data_read[22],data_read[23],data_read[24]);
+						printf("*** %2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x \n",data_read[25],data_read[26],data_read[27],data_read[28],data_read[29],data_read[30],data_read[31],data_read[32]);
 						
 						close(fd1);
 						wait_to_continue();
