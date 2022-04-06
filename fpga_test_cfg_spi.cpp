@@ -310,6 +310,71 @@ uint32_t *pcie_bar_size_ats   = NULL;
 			return fd;   
 		}  
 			*/
+			
+		/* 
+		 * ===  FUNCTION  ======================================================================
+		 *         Name:  ats wait cmd acknoledge
+		 *  Description:  ats wait 64 bits of DEBUG serial sync 
+		 *  Requiremets:  
+		 *                buffer = pointer of serial
+		 * =====================================================================================
+		 */
+		void * ats_wait_cmd_ack(uint8_t * data_rd, int fd1,uint8_t cmd)  
+		{					
+			do
+			{
+				read(fd1,data_rd,1);
+				printf("0x%2.2x",data_rd[0]&0xff);
+				/*if (memcmp(data_rd,"\xdd\xdd\xdd\xdd\xdd\xdd\xdd\xd4",8)==0)
+				{
+					printf("\n*** Command 0x04 acknoledge received \n");	
+					break;									
+				};*/
+				data_rd[7]=data_rd[6];						
+				data_rd[6]=data_rd[5];							
+				data_rd[5]=data_rd[4];								
+				data_rd[4]=data_rd[3];								
+				data_rd[3]=data_rd[2];								
+				data_rd[2]=data_rd[1];								
+				data_rd[1]=data_rd[0];	
+							
+			}
+			while (1); 
+			
+			return data_rd;
+		}
+		
+		/* 
+		 * ===  FUNCTION  ======================================================================
+		 *         Name:  ats wait for sync
+		 *  Description:  ats wait 64 bits of DEBUG serial sync 
+		 *  Requiremets:  
+		 *                buffer = pointer of serial
+		 * =====================================================================================
+		 */
+		void ats_wait_for_sync(uint8_t * data_rd, int fd1)  
+		{					
+			do
+			{
+				read(fd1,data_rd,1);
+				if (memcmp(data_rd,"\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc",8)==0)
+				{
+					printf("\n*** Sync 0xcc received \n");	
+					break;									
+				};
+				data_rd[7]=data_rd[6];						
+				data_rd[6]=data_rd[5];							
+				data_rd[5]=data_rd[4];								
+				data_rd[4]=data_rd[3];								
+				data_rd[3]=data_rd[2];								
+				data_rd[2]=data_rd[1];								
+				data_rd[1]=data_rd[0];	
+							
+			}
+			while (1); 
+			
+		}
+							
 		/*
 		 * =====================================================================================
 		 *         Type:  aes_mode_t
@@ -4986,8 +5051,7 @@ int main(int argc, char **argv)
 								break;
 								
 							case 5:	
-							
-								//MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 					
+												
 								data_write[0]=0x21;
 								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
 								break;
@@ -5082,56 +5146,125 @@ int main(int argc, char **argv)
 						printf("-- ============================\n");
 						printf("-- Serial Port Open /dev/ttyS0 \n");	
 						printf("-- ============================\n");
-						//printf("\n Serial Port Open /dev/ttyS5\n"); 
-						//int fd=open_port("/dev/ttyS4");
+						
 						int fd1=serial_open("/dev/ttyS0");
 							
 						data_write[0] = 0x40; 
-						data_write[1] = 0x40;  
-						data_write[2] = 0x01; 	
-						data_write[3] = 0x04; 	
-						data_write[4] = 0x04; 	
-						data_write[5] = 0x04; 	
-						data_write[6] = 0x04; 	
-						data_write[7] = 0x04; 							
-                        	
-						
-						if ((ret_code=write(fd1,data_write,1))==-1) 
-						{
-							perror(NULL);
-						};
-						printf("\n Return code write = %d",ret_code); 	
-						
-						
+												
 						while ((ret_code=read(fd1,data_read,sizeof(data_read))) > 0) 
 						{
-							printf("\n Status  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
-							printf("\n Status  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[7]&0xff,data_read[6]&0xff,data_read[5]&0xff,data_read[4]&0xff); 
-								
+							printf("\n Return code read = %d",ret_code);
+							
+							printf("\n Status  = ");
+							for(int i = 0; i < ret_code; i++)
+							{												
+								printf("0x%2.2x ",data_read[i]&0xff); 
+							};
+							printf("\n"); 
 						};
-						/*
-						if ((ret_code=read(fd1,data_read,sizeof(data_read)))==-1) 
-						{
-							perror(NULL);
-						}; 
-						printf("\n Return code read = %d",ret_code);
-							*/
+								
+								if ((ret_code=write(fd1,data_write,1))==-1) 
+								{
+									perror(NULL);
+								};
+								printf("\n Return code write = %d",ret_code); 	
+								
+								while ((ret_code=read(fd1,data_read,sizeof(data_read))) > 0)
+								{
+									printf("\n Status  = ");
+									for(int i = 0; i < ret_code; i++)
+									{												
+										printf("0x%2.2x ",data_read[i]&0xff); 										
+									};
+									printf("\n"); 								
+								};	
+								
+								if ((ret_code=read(fd1,data_read,sizeof(data_read)))==-1) 
+								{
+									perror(NULL);
+								}; 
+								printf("\n Return code read = %d",ret_code); 						
+								
+									printf("\n Status  = ");
+									for(int i = 0; i < ret_code; i++)
+									{												
+										printf("0x%2.2x ",data_read[i]&0xff); 
+									};
+									printf("\n"); 
+													
+								while ((ret_code=read(fd1,data_read,sizeof(data_read))) > 0) 
+								{
+									printf("\n Status  = ");
+									for(int i = 0; i < ret_code; i++)
+									{												
+										printf("0x%2.2x ",data_read[i]&0xff); 
+									};
+									printf("\n"); 	
+								};						
+						
+								
+						close(fd1);
+						wait_to_continue();
+						break;
+						return 0;
+					}  	
+					
+				case 67 : 
+					{
+						printf("-- ===================\n");
+						printf("-- Enable ATS and set \n");
+						printf("-- internal loop mode \n");	
+						printf("-- ===================\n");						
+												
+						printf("\n*** Enable ATS and set internal loop mode ***\n");	
+						data_write[0]=0x21;
+						MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
+						
+						printf("\n*** Serial Port Open /dev/ttyS0 ***\n");	
+						int fd1=serial_open("/dev/ttyS0");
+							
+						ats_wait_for_sync(data_read,fd1);		
+						
+						data_write[0] = 0x40; 
+							
 						if ((ret_code=write(fd1,data_write,1))==-1) 
 						{
 							perror(NULL);
 						};
-						printf("\n Return code write = %d",ret_code); 	
+						//printf("\n Return code write = %d",ret_code); 
+						printf("\n*** Sent Status Command ***\n");		
+								/*														
+								
+								while (1); //((ret_code=read(fd1,data_read,1)) > 0) &&
+								*/
+						//ats_wait_cmd_ack(data_read,fd1,data_write[0]);
 						
 						if ((ret_code=read(fd1,data_read,sizeof(data_read)))==-1) 
 						{
 							perror(NULL);
 						}; 
-						printf("\n Return code read = %d",ret_code); 						
-											
-						printf("\n Status  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
-						printf("\n Status  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[7]&0xff,data_read[6]&0xff,data_read[5]&0xff,data_read[4]&0xff); 
-						printf("\n Status  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[11]&0xff,data_read[10]&0xff,data_read[9]&0xff,data_read[8]&0xff); 
-						printf("\n Status  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[15]&0xff,data_read[14]&0xff,data_read[13]&0xff,data_read[12]&0xff); 
+								printf("\n Return code read = %d",ret_code); 						
+								
+									printf("\n Status  = ");
+									for(int i = 0; i < ret_code; i++)
+									{												
+										printf("0x%2.2x ",data_read[i]&0xff); 
+									};
+									printf("\n"); 
+													
+								while ((ret_code=read(fd1,data_read,sizeof(data_read))) > 0) 
+								{
+									printf("\n Status  = ");
+									for(int i = 0; i < ret_code; i++)
+									{												
+										printf("0x%2.2x ",data_read[i]&0xff); 
+										if ((data_read[i]&0xff==0xdd)) //(data_read[i]&0xff==0xcc) || 
+											{
+												printf("****************** GOT IT *************************");													
+											};
+									};
+									printf("\n"); 	
+								};
 						
 						close(fd1);
 						wait_to_continue();
