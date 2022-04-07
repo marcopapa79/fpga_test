@@ -164,6 +164,14 @@
 #define AES_SIZE_MODES     2  // defined only two AES modes 128 and 256
 #define MAX_KEY_NUM       16  // FPGA hardcoded keys
 /*===========================*/
+
+/*===========================
+===== DEBUG Parameters =====*/
+#define STATUS_CMD			0x40
+#define FILTER_CMD			0x30
+#define START_CMD			0x10
+
+/*===========================*/
 // Utility details
 //      Version
 //       Date
@@ -310,38 +318,6 @@ uint32_t *pcie_bar_size_ats   = NULL;
 			return fd;   
 		}  
 			*/
-			
-		/* 
-		 * ===  FUNCTION  ======================================================================
-		 *         Name:  ats wait cmd acknoledge
-		 *  Description:  ats wait 64 bits of DEBUG serial sync 
-		 *  Requiremets:  
-		 *                buffer = pointer of serial
-		 * =====================================================================================
-		 */
-		void ats_wait_cmd_ack(uint8_t * data_rd, int fd1,uint8_t cmd)  
-		{					
-			do
-			{
-				read(fd1,data_rd,1);
-				if (memcmp(data_rd,"\xd4\xdd\xdd\xdd\xdd\xdd\xdd\xdd",8)==0)
-				{
-					printf("\n*** Command 0x04 acknoledge received \n");	
-					break;									
-				};
-				data_rd[7]=data_rd[6];						
-				data_rd[6]=data_rd[5];							
-				data_rd[5]=data_rd[4];								
-				data_rd[4]=data_rd[3];								
-				data_rd[3]=data_rd[2];								
-				data_rd[2]=data_rd[1];								
-				data_rd[1]=data_rd[0];	
-							
-			}
-			while (1); 
-			
-			//return data_rd;
-		}
 		
 		/* 
 		 * ===  FUNCTION  ======================================================================
@@ -351,8 +327,8 @@ uint32_t *pcie_bar_size_ats   = NULL;
 		 *                buffer = pointer of serial
 		 * =====================================================================================
 		 */
-		void ats_wait_for_sync(uint8_t * data_rd, int fd1)  
-		{					
+		uint32_t ats_wait_for_sync(uint8_t * data_rd, int fd1)  
+		{	
 			do
 			{
 				read(fd1,data_rd,1);
@@ -371,7 +347,51 @@ uint32_t *pcie_bar_size_ats   = NULL;
 							
 			}
 			while (1); 
+			return 1;			
+		}
 			
+		/* 
+		 * ===  FUNCTION  ======================================================================
+		 *         Name:  ats wait cmd acknoledge
+		 *  Description:  ats wait 64 bits of DEBUG serial sync 
+		 *  Requiremets:  
+		 *                buffer = pointer of serial
+		 * =====================================================================================
+		 */
+		void ats_wait_cmd_ack(uint8_t * data_rd, int fd1,uint8_t cmd)  
+		{		
+			uint8_t ack_cmd[8];
+			uint32_t count=0;
+			
+			ack_cmd[4]=0xdd; ack_cmd[5]=0xdd; ack_cmd[6]=0xdd; ack_cmd[7]=0xdd;
+			ack_cmd[1]=0xdd; ack_cmd[2]=0xdd; ack_cmd[3]=0xdd;
+			ack_cmd[0]=0xd0+((cmd>>4)&0x0f);
+			do
+			{	
+				read(fd1,data_rd,1);
+				if (memcmp(data_rd,ack_cmd,8)==0)
+				{
+					printf("\n*** Command 0x%2.2x acknoledge received \n",(cmd>>4)&0xff);	
+					break;									
+				};
+				data_rd[7]=data_rd[6];						
+				data_rd[6]=data_rd[5];							
+				data_rd[5]=data_rd[4];								
+				data_rd[4]=data_rd[3];								
+				data_rd[3]=data_rd[2];								
+				data_rd[2]=data_rd[1];								
+				data_rd[1]=data_rd[0];	
+				
+				usleep(150);// 150us
+				++count;
+				if (count==10000) printf("\n*** Error Exit for timeout \n");	
+					
+				 	
+			}
+			while (count<10000); //wait 1.5second
+			//while (1); 
+			
+			//return data_rd;
 		}
 		
 		/* 
@@ -5037,13 +5057,12 @@ int main(int argc, char **argv)
 						printf("--  (3) Enable ATS + DHCP           \n");
 						printf("--  (4) Enable Trigger              \n");
 						printf("--  (5) Enable ATS internal loop    \n");
-						printf("--  (6) Enaable ATS internal loop   \n");
-						printf("--      disable sync message 0xCC   \n");
+						printf("--  (6) Enable ATS disabled loop    \n");
 						printf("--  (7) Disable All                 \n");
 						printf("-- =================================\n");
 						
 						
-						printf("Selection [1..6] ? : ");
+						printf("Selection [1..7] ? : ");
 						if ((ret_code=scanf("%d", &ats_sel))!=1)
 						{
 							printf("function read error %d\n",ret_code);
@@ -5068,7 +5087,8 @@ int main(int argc, char **argv)
 
 							case 3: 
 													
-								MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 					
+								MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES);	
+								usleep(2*100*1000); 					
 								data_write[0]=data_read[0]+0x03;
 								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
 								break;
@@ -5076,6 +5096,7 @@ int main(int argc, char **argv)
 							case 4:	
 													
 								MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 	
+								usleep(2*100*1000);	
 								data_write[0]=data_read[0]+0x10;
 								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
 								break;
@@ -5088,8 +5109,7 @@ int main(int argc, char **argv)
 								
 							case 6:	
 							
-								MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 					
-								data_write[0]=0x61;
+								data_write[0]=0x01;
 								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
 								break;
 								
@@ -5255,13 +5275,14 @@ int main(int argc, char **argv)
 							
 						ats_wait_for_sync(data_read,fd1);		
 						
-						data_write[0] = 0x40; 
+						// STATUS CMD
+						data_write[0] = STATUS_CMD; 
 							
 						if ((ret_code=write(fd1,data_write,1))==-1) 
 						{
 							perror(NULL);
 						};
-						printf("\n*** Sent Status Command 0x04 \n");		
+						printf("\n*** Sent Command 0x%2.2x \n",(data_write[0]>>4)&0xff);		
 						
 						ats_wait_cmd_ack(data_read,fd1,data_write[0]);						
 						read_debug_response(data_read,fd1,60, NO_PRINT_VALUES);//PRINT_VALUES);//NO_PRINT_VALUES);
@@ -5271,8 +5292,94 @@ int main(int argc, char **argv)
 						printf("*** DEBUG Version 0x%2.2x \n",data_read[0]);
 						printf("*** DEBUG module Mask 0x%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x",data_read[1],data_read[2],data_read[3],data_read[4],data_read[5],data_read[6],data_read[7],data_read[8]);
 						printf(".%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x \n",data_read[9],data_read[10],data_read[11],data_read[12],data_read[13],data_read[14],data_read[15],data_read[16]);
-						printf("*** %2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x \n",data_read[17],data_read[18],data_read[19],data_read[20],data_read[21],data_read[22],data_read[23],data_read[24]);
-						printf("*** %2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x \n",data_read[25],data_read[26],data_read[27],data_read[28],data_read[29],data_read[30],data_read[31],data_read[32]);
+						printf("*** DEBUG level Mask 0x%2.2x \n",data_read[17]&0xf0);
+						printf("-- ============================\n");
+						
+						// FILTER CMD
+						data_write[0] = 0x3f;//FILTER_CMD;//+0x0f; 
+
+						if ((ret_code=write(fd1,data_write,1))==-1) 
+						{
+							perror(NULL);
+						};
+						printf("\n*** Sent Command 0x%2.2x \n",(data_write[0]>>4)&0xff);
+						
+						data_write[0] = 0xFF;  data_write[1] = 0xFF;  data_write[2] = 0xFF;  data_write[3] = 0xFF; 
+						data_write[4] = 0x00;  data_write[5] = 0x00;  data_write[6] = 0x00;  data_write[7] = 0x00; 
+						data_write[8] = 0x00;  data_write[9] = 0x00;  data_write[10] = 0x00; data_write[11] = 0x00; 
+						data_write[12] = 0x00; data_write[13] = 0x00; data_write[14] = 0x00; data_write[15] = 0x00; 
+						
+						if ((ret_code=write(fd1,data_write,16))==-1) 
+						{
+							perror(NULL);
+						};
+						
+						data_write[0] = FILTER_CMD; 
+						ats_wait_cmd_ack(data_read,fd1,data_write[0]);
+						
+						
+						
+						// START DEBUG CMD
+						data_write[0] = START_CMD; 
+
+						if ((ret_code=write(fd1,data_write,1))==-1) 
+						{
+							perror(NULL);
+						};
+						printf("\n*** Sent Command 0x%2.2x \n",(data_write[0]>>4)&0xff);
+						
+						ats_wait_cmd_ack(data_read,fd1,data_write[0]);
+						
+						
+						// MOVE DOUT
+						data_write[0] = 0x01;  			
+						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						data_write[0] = 0x03;  			
+						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						data_write[0] = 0x07;  			
+						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						data_write[0] = 0x0F;  			
+						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+				
+						for(i = 0; i < 5; i++)
+						{	
+							read_debug_response(data_read, fd1, 8, NO_PRINT_VALUES);		
+							printf("Module:%2.2x Function: %2.2x Time Stamp: %2.2x.%2.2x Payload: 0x%2.2x.%2.2x.%2.2x.%2.2x\n" ,data_read[0],data_read[1],data_read[3],data_read[2],data_read[7],data_read[6],data_read[5],data_read[4]);
+						};
+						/*
+						// MOVE DOUT
+						data_write[0] = 0x1F;  			
+						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						data_write[0] = 0x3F;  			
+						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						data_write[0] = 0x7F;  			
+						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						data_write[0] = 0xFF;  			
+						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						
+						for(i = 0; i < 8; i++)
+						{		
+							read_debug_response(data_read, fd1, 8, NO_PRINT_VALUES);
+							printf("0x%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x\n" ,data_read[7],data_read[6],data_read[5],data_read[4],data_read[3],data_read[2],data_read[1],data_read[0]);
+						};	*/
+												
+						
+						// STOP DEBUG CMD
+						data_write[0] = 0x20;//START_CMD; 
+
+						if ((ret_code=write(fd1,data_write,1))==-1) 
+						{
+							perror(NULL);
+						};
+						printf("\n*** Sent Command 0x%2.2x \n",(data_write[0]>>4)&0xff);
+						
+						ats_wait_cmd_ack(data_read,fd1,data_write[0]);
+						
+						// reset dout
+						data_write[0] = 0x00;  			
+						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						
+						ats_wait_for_sync(data_read,fd1);
 						
 						close(fd1);
 						wait_to_continue();
