@@ -171,14 +171,17 @@
 #define FILTER_CMD			0x30
 #define START_CMD			0x10
 
+/*===========================
+===== CFG ROM old managment=====*/
+#define _OLDCFGROM             0
 /*===========================*/
 // Utility details
 //      Version
 //       Date
 
 uint8_t ver_major = 1;
-uint8_t ver_minor = 11;
-char date[]="06/04/2022";
+uint8_t ver_minor = 12;
+char date[]="28/04/2022";
 
 /*===========================*/
 
@@ -217,9 +220,11 @@ uint32_t sizeSecsBuffer = 32*16;
 #define ENABLE_ATS_DHCP(x)((x) == 1?"ATS_DHCP_ENABLED":"ATS_DHCP_DISABLED")
 #define ENABLE_ATS_IPV6(x)((x) == 1?"ATS_IPV6_ENABLED":"ATS_IPV6_DISABLED")
 #define ENABLE_ATS_VARIABLE_PACKET(x)((x) == 1?"VARIABLE_PACKET_ENABLED":"VARIABLE_PACKET_DISABLED")
-#define ENABLE_ATS_TRIGGER(x)((x) == 1?"ATS_TRIGGER_ENABLED":"ATS_TRIGGER_DISABLED")
+#define DISABLE_ATS_SW_TRACING(x)((x) == 0?"ATS_SW_TRACING_ENABLED":"ATS_SW_TRACING_DISABLED")
+#define DISABLE_ATS_HW_TRACING(x)((x) == 0?"ATS_HW_TRACING_ENABLED":"ATS_HW_TRACING_DISABLED")
 #define ENABLE_ATS_LOOP(x)((x) == 1?"ATS_INTERNAL_LOOP_ENABLED":"ATS_INTERNAL_LOOP_DISABLED")
 #define DISABLE_ATS_SYNC(x)((x) == 1?"ATS_SYNC_DISABLED":"ATS_SYNC_ENABLED")
+#define TRACING_STATUS(x)((x) == 1?"TRACING_STARTED":"TRACING_NOT_STARTED")
 
 
 /*====================================
@@ -393,6 +398,7 @@ uint32_t *pcie_bar_size_ats   = NULL;
 			
 			//return data_rd;
 		}
+					
 		
 		/* 
 		 * ===  FUNCTION  ======================================================================
@@ -422,7 +428,8 @@ uint32_t *pcie_bar_size_ats   = NULL;
 			}; 
 			free(debug_response);
 			return data_rd;
-		}			
+		}
+		
 							
 		/*
 		 * =====================================================================================
@@ -1853,8 +1860,15 @@ int main(int argc, char **argv)
 	printf("\n ===================================");
 	printf("\n ===  IO MODULE (HW parameters)  ===");
 	printf("\n =====      Version %2.2x.%2.2x      =====",data_read[0]&0xff,data_read[1]&0xff); 
+		
+	#if _OLDCFGROM	
+		{	
 	IORd(pcie_bar_io[0] + 0x13, data_read, 1,1, NO_PRINT_VALUES);
 	printf("\n HW CONF ID \t= %2.2x", data_read[0]&0xff);
+		}; 
+	#endif 
+	
+	
 	IORd(pcie_bar_io[0] + 0x24, data_read, 2, 1, NO_PRINT_VALUES);
 	printf("\n PLATFORM ID \t= %2.2x\n PLATFORM SP ID\t= %2.2x", data_read[0]&0xff,data_read[1]&0xff);	
 	IORd(pcie_bar_io[0] + 0x27, data_read, 1, 1, NO_PRINT_VALUES);
@@ -1865,20 +1879,28 @@ int main(int argc, char **argv)
 	printf("\n DOUT_TYPE \t= %s", IO_TYPE((data_read[0]>>3)&0x01));
 	printf("\n FEEDBACK WIDTH\t= %d", (((data_read[0]&0x07)+1)*8));
 	
+	#if _OLDCFGROM	
+		{	
 	IORd(pcie_bar_io[0] + 0x14, data_read, 4, 1, NO_PRINT_VALUES);
 	printf("\n DIN NUM \t= %d", (data_read[0]&0xff));
 	printf("\n DOUT NUM \t= %d", (data_read[1]&0xff));
 	printf("\n FB MASK \t= 0x%2.2x", (data_read[2]&0xff));
 	printf("\n DOUT CFG \t= 0x%2.2x", (data_read[3]&0xff));
 	printf("\n ===================================");
+		}; 
+	#endif 
 	
 	printf("\n\n");
 	IORd(pcie_bar_mem[1] + 0x14, data_read, 2, 1, NO_PRINT_VALUES); 
 	printf("\n ===================================");
 	printf("\n === SRAM MODULE (HW parameters) ===");
 	printf("\n =====      Version %2.2x.%2.2x      =====",data_read[0]&0xff,data_read[1]&0xff); 
+	#if _OLDCFGROM	
+		{	
 	IORd(pcie_bar_mem[1] + 0x2F, data_read, 1,1, NO_PRINT_VALUES);
 	printf("\n HW CONF ID \t= %2.2x", data_read[0]&0xff);
+		}; 
+	#endif 
 	IORd(pcie_bar_mem[1] + 0x30, data_read, 2, 1, NO_PRINT_VALUES);
 	printf("\n PLATFORM ID \t= %2.2x\n PLATFORM SP ID\t= %2.2x", data_read[0]&0xff,data_read[1]&0xff);	
 	IORd(pcie_bar_mem[1] + 0x32, data_read, 1, 1, NO_PRINT_VALUES);
@@ -1911,8 +1933,12 @@ int main(int argc, char **argv)
 	printf("\n ===================================");
 	printf("\n === QLI MODULE  (HW parameters) ===");
 	printf("\n =====      Version %2.2x.%2.2x      =====",data_read[0]&0xff,data_read[1]&0xff); 
+	#if _OLDCFGROM	
+		{	
 	MRd32(mem_addr_led + 0x38, data_read, 1,1, NO_PRINT_VALUES);
 	printf("\n HW CONF ID \t= %2.2x", data_read[0]&0xff);
+		}; 
+	#endif 
 	MRd32(mem_addr_led + 0x17, data_read, 1, 1, NO_PRINT_VALUES);
 	printf("\n PLATFORM ID \t= %2.2x", data_read[0]&0xff);
 	MRd32(mem_addr_led + 0x39, data_read, 1, 1, NO_PRINT_VALUES);	
@@ -1962,9 +1988,13 @@ int main(int argc, char **argv)
 	printf("\n       Sector 0");	
 	printf("\n Checksum 64bytes \t= %2.2x", (data_read[0]&0xff));
 	printf("\n Checksum 64bytes ok \t= %s\n", CK_MATCH(data_read[1]&0x01));
+	#if _OLDCFGROM	
+		{	
 	printf("\n       Sector 2");	
 	printf("\n Checksum 64bytes \t= %2.2x", (data_read[2]&0xff));
 	printf("\n Checksum 64bytes ok \t= %s", CK_MATCH((data_read[1]>>1)&0x01));
+		}; 
+	#endif 
   
 	
 	printf("\n\n === TEST FIRST BYTE SRAM ===");
@@ -2017,6 +2047,7 @@ int main(int argc, char **argv)
 	IORd(pcie_bar_secs[1] + 0x2B, data_read, 1,1, NO_PRINT_VALUES);
 	printf("\n AES mode register: %2.2x",data_read[0]); 
 	
+			/*
 				printf("\n\n\n ======================================= \t");
 				printf("\n == enable debug =="); 
 				data_write[0]=0x90;
@@ -2064,7 +2095,7 @@ int main(int argc, char **argv)
 				printf("\n == disable debug =="); 
 				data_write[0]=0x80;
 				IOWr(pcie_bar_secs[1] + 0x20, data_write, 1, 1, 0, NO_PRINT_VALUES);
-				
+				*/
 	printf("\n\n =======================================");  
 	printf("\n Config ROM SPI core frequency selection\n\n");  
 	//printf("\n ==================================\n");  
@@ -5050,19 +5081,20 @@ int main(int argc, char **argv)
 				case 64 : 
 					{
 						
-						printf("-- =================================\n");
-						printf("--       ATS command                \n");		
-						printf("--  (1) ATS Hardware Reset          \n");
-						printf("--  (2) Enable ATS + DHCP + Trigger \n");
-						printf("--  (3) Enable ATS + DHCP           \n");
-						printf("--  (4) Enable Trigger              \n");
-						printf("--  (5) Enable ATS internal loop    \n");
-						printf("--  (6) Enable ATS disabled loop    \n");
-						printf("--  (7) Disable All                 \n");
-						printf("-- =================================\n");
+						printf("-- =======================================\n");
+						printf("--       ATS command                      \n");		
+						printf("--  (1) ATS Hardware Reset                \n");
+						printf("--  (2) Enable ATS + DHCP                 \n");
+						printf("--  (3) Enable ATS + HW/SW TRACING        \n");
+						printf("--  (4) Enable ATS and Disable HW tracing \n");
+						printf("--  (5) Enable ATS and Disable SW tracing \n");
+						printf("--  (6) Enable ATS internal loop          \n");
+						printf("--  (7) Enable ATS disabled loop          \n");
+						printf("--  (8) Disable All                       \n");
+						printf("-- =======================================\n");
 						
 						
-						printf("Selection [1..7] ? : ");
+					printf("Selection [1..7] ? : ");
 						if ((ret_code=scanf("%d", &ats_sel))!=1)
 						{
 							printf("function read error %d\n",ret_code);
@@ -5087,43 +5119,53 @@ int main(int argc, char **argv)
 
 							case 3: 
 													
-								MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES);	
-								usleep(2*100*1000); 					
-								data_write[0]=data_read[0]+0x03;
+								data_write[0]=0x01;
 								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
+								data_write[0]=0x00;
+								MWr32(mem_addr_ats + 0x21, data_write, 1, 1, NO_PRINT_VALUES); 
 								break;
 
-							case 4:	
+							case 4: 
 													
-								MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 	
-								usleep(2*100*1000);	
-								data_write[0]=data_read[0]+0x10;
+								data_write[0]=0x01;
 								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
+								data_write[0]=0x01; // disabled hw tracing
+								MWr32(mem_addr_ats + 0x21, data_write, 1, 1, NO_PRINT_VALUES); 
+								break;
+
+							case 5:	
+														
+								data_write[0]=0x01;
+								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 	
+								data_write[0]=0x02; // disabled sw tracing
+								MWr32(mem_addr_ats + 0x21, data_write, 1, 1, NO_PRINT_VALUES); 
 								break;
 								
-							case 5:	
+							case 6:	
 												
 								data_write[0]=0x21;
 								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
 								break;
 								
-							case 6:	
+							case 7:	
 							
 								data_write[0]=0x01;
 								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
 								break;
 								
-							case 7:	
+							case 8:	
 								
 								data_write[0]=0x00;
-								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
+								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 	
+								data_write[0]=0x03; // disabled hw/sw tracing
+								MWr32(mem_addr_ats + 0x21, data_write, 1, 1, NO_PRINT_VALUES); 
 								break;
 
 								
 							default:
 								break;
 							}
-						
+							
 						usleep(20*100*1000);
 
 						MRd32(mem_addr_ats + 0x20, data_read, 4, 4, NO_PRINT_VALUES); 
@@ -5131,7 +5173,8 @@ int main(int argc, char **argv)
 						printf("\n ATS DHCP          = %s", ENABLE_ATS_DHCP((data_read[0]>>1)&0x01));
 						printf("\n ATS IPV6          = %s", ENABLE_ATS_IPV6((data_read[0]>>1)&0x02));
 						printf("\n ATS VAR PACKET    = %s", ENABLE_ATS_VARIABLE_PACKET((data_read[0]>>3)&0x01));
-						printf("\n ATS TRIGGER       = %s", ENABLE_ATS_TRIGGER((data_read[0]>>4)&0x01));
+						printf("\n ATS HW TRACING    = %s", DISABLE_ATS_HW_TRACING(data_read[1]&0x01));
+						printf("\n ATS SW TRACING    = %s", DISABLE_ATS_SW_TRACING((data_read[1]>>1)&0x01));
 						printf("\n ATS INTERNAL LOOP = %s", ENABLE_ATS_LOOP((data_read[0]>>5)&0x01));
 						printf("\n ATS SYNC SIGNAL   = %s", DISABLE_ATS_SYNC((data_read[0]>>6)&0x01));
 						
@@ -5166,7 +5209,8 @@ int main(int argc, char **argv)
 						printf("\n ATS DHCP          = %s", ENABLE_ATS_DHCP((data_read[0]>>1)&0x01));
 						printf("\n ATS IPV6          = %s", ENABLE_ATS_IPV6((data_read[0]>>1)&0x02));
 						printf("\n ATS VAR PACKET    = %s", ENABLE_ATS_VARIABLE_PACKET((data_read[0]>>3)&0x01));
-						printf("\n ATS TRIGGER       = %s", ENABLE_ATS_TRIGGER((data_read[0]>>4)&0x01));
+						printf("\n ATS HW TRACING    = %s", DISABLE_ATS_HW_TRACING(data_read[1]&0x01));
+						printf("\n ATS SW TRACING    = %s", DISABLE_ATS_SW_TRACING((data_read[1]>>1)&0x01));
 						printf("\n ATS INTERNAL LOOP = %s", ENABLE_ATS_LOOP((data_read[0]>>5)&0x01));
 						printf("\n ATS SYNC SIGNAL   = %s", DISABLE_ATS_SYNC((data_read[0]>>6)&0x01));
 						
@@ -5293,30 +5337,8 @@ int main(int argc, char **argv)
 						printf("*** DEBUG module Mask 0x%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x",data_read[1],data_read[2],data_read[3],data_read[4],data_read[5],data_read[6],data_read[7],data_read[8]);
 						printf(".%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x \n",data_read[9],data_read[10],data_read[11],data_read[12],data_read[13],data_read[14],data_read[15],data_read[16]);
 						printf("*** DEBUG level Mask 0x%2.2x \n",data_read[17]&0xf0);
+						printf("*** DEBUG status %s \n",TRACING_STATUS((data_read[17]&0x0f)>>3));
 						printf("-- ============================\n");
-						
-						// FILTER CMD
-						data_write[0] = 0x3f;//FILTER_CMD;//+0x0f; 
-
-						if ((ret_code=write(fd1,data_write,1))==-1) 
-						{
-							perror(NULL);
-						};
-						printf("\n*** Sent Command 0x%2.2x \n",(data_write[0]>>4)&0xff);
-						
-						data_write[0] = 0xFF;  data_write[1] = 0xFF;  data_write[2] = 0xFF;  data_write[3] = 0xFF; 
-						data_write[4] = 0x00;  data_write[5] = 0x00;  data_write[6] = 0x00;  data_write[7] = 0x00; 
-						data_write[8] = 0x00;  data_write[9] = 0x00;  data_write[10] = 0x00; data_write[11] = 0x00; 
-						data_write[12] = 0x00; data_write[13] = 0x00; data_write[14] = 0x00; data_write[15] = 0x00; 
-						
-						if ((ret_code=write(fd1,data_write,16))==-1) 
-						{
-							perror(NULL);
-						};
-						
-						data_write[0] = FILTER_CMD; 
-						ats_wait_cmd_ack(data_read,fd1,data_write[0]);
-						
 						
 						
 						// START DEBUG CMD
@@ -5329,7 +5351,6 @@ int main(int argc, char **argv)
 						printf("\n*** Sent Command 0x%2.2x \n",(data_write[0]>>4)&0xff);
 						
 						ats_wait_cmd_ack(data_read,fd1,data_write[0]);
-						
 						
 						// MOVE DOUT
 						data_write[0] = 0x01;  			
@@ -5362,7 +5383,28 @@ int main(int argc, char **argv)
 							read_debug_response(data_read, fd1, 8, NO_PRINT_VALUES);
 							printf("0x%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x\n" ,data_read[7],data_read[6],data_read[5],data_read[4],data_read[3],data_read[2],data_read[1],data_read[0]);
 						};	*/
-												
+						/*	
+						// STATUS CMD
+						data_write[0] = STATUS_CMD; 
+							
+						if ((ret_code=write(fd1,data_write,1))==-1) 
+						{
+							perror(NULL);
+						};
+						printf("\n*** Sent Command 0x%2.2x \n",(data_write[0]>>4)&0xff);		
+						
+						ats_wait_cmd_ack(data_read,fd1,data_write[0]);						
+						read_debug_response(data_read,fd1,60, NO_PRINT_VALUES);//PRINT_VALUES);//NO_PRINT_VALUES);
+						
+						printf("-- ============================\n");
+						printf("*** STAUTS parameter ***\n");
+						printf("*** DEBUG Version 0x%2.2x \n",data_read[0]);
+						printf("*** DEBUG module Mask 0x%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x",data_read[1],data_read[2],data_read[3],data_read[4],data_read[5],data_read[6],data_read[7],data_read[8]);
+						printf(".%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x \n",data_read[9],data_read[10],data_read[11],data_read[12],data_read[13],data_read[14],data_read[15],data_read[16]);
+						printf("*** DEBUG level Mask 0x%2.2x \n",data_read[17]&0xf0);
+						printf("*** DEBUG status %s \n",TRACING_STATUS((data_read[17]&0x0f)>>3));
+						printf("-- ============================\n");
+											
 						
 						// STOP DEBUG CMD
 						data_write[0] = 0x20;//START_CMD; 
@@ -5373,13 +5415,14 @@ int main(int argc, char **argv)
 						};
 						printf("\n*** Sent Command 0x%2.2x \n",(data_write[0]>>4)&0xff);
 						
-						ats_wait_cmd_ack(data_read,fd1,data_write[0]);
+						ats_wait_cmd_ack(data_read,fd1,data_write[0]);						
+						*/
+						ats_wait_for_sync(data_read,fd1);
 						
 						// reset dout
 						data_write[0] = 0x00;  			
 						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
 						
-						ats_wait_for_sync(data_read,fd1);
 						
 						close(fd1);
 						wait_to_continue();
