@@ -413,14 +413,19 @@ uint32_t *pcie_bar_size_ats   = NULL;
 		{		
 			int ret_code;
 			uint8_t *debug_response = (uint8_t *)calloc (length,sizeof(uint8_t));
-			uint32_t i;						
+			uint32_t i=0;	
 			
-			for(i = 0; i < length; i++)
-			{		
+			do//for(i = 0; i < length; i++)
+			{				
 				if ((ret_code=read(fd1,data_rd,1))>0)  //read(fd1,data_rd,1);
-				debug_response[i]=data_rd[0];				
-				if (debug_print == 1) printf("0x%2.2x ",data_rd[0]&0xff); 	
-			}; 						
+				{
+					debug_response[i]=data_rd[0];
+					i++;					
+					if (debug_print == 1) printf("\nret code %d ",ret_code); 
+					if (debug_print == 1) printf("0x%2.2x ",data_rd[0]&0xff); 	
+				}; 
+			} 	
+			while (i < length);
 								
 			for(i = 0; i < length; i++)
 			{		
@@ -5312,6 +5317,7 @@ int main(int argc, char **argv)
 												
 						printf("\n*** Enable ATS and set internal loop mode \n");	
 						data_write[0]=0x21;
+						
 						MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
 						
 						printf("\n*** Serial Port Open /dev/ttyS0 \n");	
@@ -5352,71 +5358,56 @@ int main(int argc, char **argv)
 						
 						ats_wait_cmd_ack(data_read,fd1,data_write[0]);
 						
+						// disable debounce
+						data_write[0] = 0x00; 
+						data_write[1] = 0x00;  
+						data_write[2] = 0x00; 	
+						data_write[3] = 0x00;  
+							
+						IOWr(pcie_bar_io[0] + 0x3C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3D, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3E, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3F, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x40, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x41, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x42, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x43, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						
 						// MOVE DOUT
-						data_write[0] = 0x01;  			
-						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
-						data_write[0] = 0x03;  			
-						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
-						data_write[0] = 0x07;  			
-						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						// walking 0
+						for(i = 0; i < 32; i++)
+						{
+							
+							data_write[0] = (0x01<<i);  	
+							data_write[1] = (0x01<<(i-8));  	
+							data_write[2] = (0x01<<(i-16));   	
+							data_write[3] = (0x01<<(i-24));  		
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+							
+							usleep(2*100*1000);
+							
+									
+							for(int j = 0; j < 5; j++)
+							{	
+								read_debug_response(data_read, fd1, 8, NO_PRINT_VALUES);		
+								if (!memcmp(data_read,"\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc",8)==0)
+								{
+									printf("Module:%2.2x Function: %2.2x Time Stamp: %2.2x.%2.2x Payload: 0x%2.2x.%2.2x.%2.2x.%2.2x\n" ,data_read[0],data_read[1],data_read[3],data_read[2],data_read[7],data_read[6],data_read[5],data_read[4]);
+								};
+							};
+							
+						};
 						data_write[0] = 0x0F;  			
 						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
-				
-						for(i = 0; i < 5; i++)
-						{	
-							read_debug_response(data_read, fd1, 8, NO_PRINT_VALUES);		
-							printf("Module:%2.2x Function: %2.2x Time Stamp: %2.2x.%2.2x Payload: 0x%2.2x.%2.2x.%2.2x.%2.2x\n" ,data_read[0],data_read[1],data_read[3],data_read[2],data_read[7],data_read[6],data_read[5],data_read[4]);
-						};
-						/*
-						// MOVE DOUT
-						data_write[0] = 0x1F;  			
-						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
-						data_write[0] = 0x3F;  			
-						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
-						data_write[0] = 0x7F;  			
-						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
-						data_write[0] = 0xFF;  			
-						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						for(int j = 0; j < 2; j++)
+							{	
+								read_debug_response(data_read, fd1, 8, NO_PRINT_VALUES);		
+								printf("Module:%2.2x Function: %2.2x Time Stamp: %2.2x.%2.2x Payload: 0x%2.2x.%2.2x.%2.2x.%2.2x\n" ,data_read[0],data_read[1],data_read[3],data_read[2],data_read[7],data_read[6],data_read[5],data_read[4]);
+							};
 						
-						for(i = 0; i < 8; i++)
-						{		
-							read_debug_response(data_read, fd1, 8, NO_PRINT_VALUES);
-							printf("0x%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x\n" ,data_read[7],data_read[6],data_read[5],data_read[4],data_read[3],data_read[2],data_read[1],data_read[0]);
-						};	*/
-						/*	
-						// STATUS CMD
-						data_write[0] = STATUS_CMD; 
-							
-						if ((ret_code=write(fd1,data_write,1))==-1) 
-						{
-							perror(NULL);
-						};
-						printf("\n*** Sent Command 0x%2.2x \n",(data_write[0]>>4)&0xff);		
-						
-						ats_wait_cmd_ack(data_read,fd1,data_write[0]);						
-						read_debug_response(data_read,fd1,60, NO_PRINT_VALUES);//PRINT_VALUES);//NO_PRINT_VALUES);
-						
-						printf("-- ============================\n");
-						printf("*** STAUTS parameter ***\n");
-						printf("*** DEBUG Version 0x%2.2x \n",data_read[0]);
-						printf("*** DEBUG module Mask 0x%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x",data_read[1],data_read[2],data_read[3],data_read[4],data_read[5],data_read[6],data_read[7],data_read[8]);
-						printf(".%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x \n",data_read[9],data_read[10],data_read[11],data_read[12],data_read[13],data_read[14],data_read[15],data_read[16]);
-						printf("*** DEBUG level Mask 0x%2.2x \n",data_read[17]&0xf0);
-						printf("*** DEBUG status %s \n",TRACING_STATUS((data_read[17]&0x0f)>>3));
-						printf("-- ============================\n");
-											
-						
-						// STOP DEBUG CMD
-						data_write[0] = 0x20;//START_CMD; 
-
-						if ((ret_code=write(fd1,data_write,1))==-1) 
-						{
-							perror(NULL);
-						};
-						printf("\n*** Sent Command 0x%2.2x \n",(data_write[0]>>4)&0xff);
-						
-						ats_wait_cmd_ack(data_read,fd1,data_write[0]);						
-						*/
 						ats_wait_for_sync(data_read,fd1);
 						
 						// reset dout
