@@ -435,6 +435,38 @@ uint32_t *pcie_bar_size_ats   = NULL;
 			return data_rd;
 		}
 		
+		
+		/* 
+		 * ===  FUNCTION  ======================================================================
+		 *         Name:  ats_response_read
+		 *  Description:  debug serial response
+		 *  Requiremets:  
+		 *                sync_numb = max num of sync accepted
+		 *                length    = max num QWord read
+		 * =====================================================================================
+		 */
+		void ats_response_read(int fd1, uint32_t sync_numb, uint32_t length, unsigned int debug_print)
+		
+		{		
+			int ret_code;
+			uint8_t *debug_response = (uint8_t *)calloc (length,sizeof(uint8_t));
+			uint32_t i=0;	
+			uint32_t count=0;	
+			
+			do
+			{	
+				read_debug_response(debug_response, fd1, 8, debug_print);								
+				if (!memcmp(debug_response,"\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc",8)==0)
+				{	
+					i++;
+					printf("Module:%2.2x Function: %2.2x Time Stamp: %2.2x.%2.2x Payload: 0x%2.2x.%2.2x.%2.2x.%2.2x\n" ,debug_response[0],debug_response[1],debug_response[3],debug_response[2],debug_response[7],debug_response[6],debug_response[5],debug_response[4]);
+				} else ++count;
+			}
+			while ((count<sync_numb) && (i<length));
+			
+			free(debug_response);
+		}
+		
 							
 		/*
 		 * =====================================================================================
@@ -2275,7 +2307,8 @@ int main(int argc, char **argv)
 		printf("Cmd_64: DEBUG enable\n");
 		printf("Cmd_65: DEBUG status read\n");
 		printf("Cmd_66: DEBUG serial command check\n");
-		printf("Cmd_67: DEBUG serial basic test\n");
+		printf("Cmd_67: DEBUG serial basic test IO module\n");
+		printf("Cmd_68: DEBUG serial basic test LP module\n");
 		printf("=============== DIO TEST ==================\n");
 		printf("Cmd_70: DIN status\n");
 		printf("Cmd_71: DIN interrupt test\n");
@@ -5386,7 +5419,112 @@ int main(int argc, char **argv)
 							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
 							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
 							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+										
+							ats_response_read(fd1, 1, 3, NO_PRINT_VALUES);		
 							
+							
+						};
+							ats_response_read(fd1, 3, 13, NO_PRINT_VALUES);
+						/* 
+						// init 0xFF data
+							data_write[0] = 0xff; 	
+							data_write[1] = 0xff;  	
+							data_write[2] = 0xff; 
+							data_write[3] = 0xff; 
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+							
+							ats_response_read(fd1, 1, 3, NO_PRINT_VALUES);
+						
+						// walking 1
+						for(i = 0; i < 32; i++)
+						{
+							data_write[0] = 0xff-(0x01<<i);  	
+							data_write[1] = 0xff-(0x01<<(i-8));  	
+							data_write[2] = 0xff-(0x01<<(i-16));   	
+							data_write[3] = 0xff-(0x01<<(i-24));  		
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+													
+							ats_response_read(fd1, 1, 3, NO_PRINT_VALUES);		
+							
+							
+						};
+							ats_response_read(fd1, 3, 13, NO_PRINT_VALUES);
+						 		*/	
+						// reset data
+							data_write[0] = 0x00; 	
+							data_write[1] = 0x00;  	
+							data_write[2] = 0x00; 
+							data_write[3] = 0x00; 
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+								
+						
+						close(fd1);
+						wait_to_continue();
+						break;
+						return 0;
+					}  	
+				
+				case 68 : 
+					{
+						printf("-- ===================\n");
+						printf("-- Enable ATS and set \n");
+						printf("-- internal loop mode \n");	
+						printf("-- ===================\n");						
+												
+						printf("\n*** Enable ATS and set internal loop mode \n");	
+						data_write[0]=0x21;
+						
+						MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 
+						
+						printf("\n*** Serial Port Open /dev/ttyS0 \n");	
+						int fd1=serial_open("/dev/ttyS0");
+							
+						ats_wait_for_sync(data_read,fd1);		
+						
+						// STATUS CMD
+						data_write[0] = STATUS_CMD; 
+							
+						if ((ret_code=write(fd1,data_write,1))==-1) 
+						{
+							perror(NULL);
+						};
+						printf("\n*** Sent Command 0x%2.2x \n",(data_write[0]>>4)&0xff);		
+						
+						ats_wait_cmd_ack(data_read,fd1,data_write[0]);						
+						read_debug_response(data_read,fd1,60, NO_PRINT_VALUES);//PRINT_VALUES);//NO_PRINT_VALUES);
+						
+						printf("-- ============================\n");
+						printf("*** STAUTS parameter ***\n");
+						printf("*** DEBUG Version 0x%2.2x \n",data_read[0]);
+						printf("*** DEBUG module Mask 0x%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x",data_read[1],data_read[2],data_read[3],data_read[4],data_read[5],data_read[6],data_read[7],data_read[8]);
+						printf(".%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x.%2.2x \n",data_read[9],data_read[10],data_read[11],data_read[12],data_read[13],data_read[14],data_read[15],data_read[16]);
+						printf("*** DEBUG level Mask 0x%2.2x \n",data_read[17]&0xf0);
+						printf("*** DEBUG status %s \n",TRACING_STATUS((data_read[17]&0x0f)>>3));
+						printf("-- ============================\n");
+						
+						
+						// START DEBUG CMD
+						data_write[0] = START_CMD; 
+
+						if ((ret_code=write(fd1,data_write,1))==-1) 
+						{
+							perror(NULL);
+						};
+						printf("\n*** Sent Command 0x%2.2x \n",(data_write[0]>>4)&0xff);
+						
+						ats_wait_cmd_ack(data_read,fd1,data_write[0]);
+												
+						
+						// wait for LP messages
 							usleep(2*100*1000);
 							
 									
@@ -5398,29 +5536,13 @@ int main(int argc, char **argv)
 									printf("Module:%2.2x Function: %2.2x Time Stamp: %2.2x.%2.2x Payload: 0x%2.2x.%2.2x.%2.2x.%2.2x\n" ,data_read[0],data_read[1],data_read[3],data_read[2],data_read[7],data_read[6],data_read[5],data_read[4]);
 								};
 							};
-							
-						};
-						data_write[0] = 0x0F;  			
-						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
-						for(int j = 0; j < 2; j++)
-							{	
-								read_debug_response(data_read, fd1, 8, NO_PRINT_VALUES);		
-								printf("Module:%2.2x Function: %2.2x Time Stamp: %2.2x.%2.2x Payload: 0x%2.2x.%2.2x.%2.2x.%2.2x\n" ,data_read[0],data_read[1],data_read[3],data_read[2],data_read[7],data_read[6],data_read[5],data_read[4]);
-							};
-						
-						ats_wait_for_sync(data_read,fd1);
-						
-						// reset dout
-						data_write[0] = 0x00;  			
-						IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
-						
 						
 						close(fd1);
 						wait_to_continue();
 						break;
 						return 0;
 					}  	
-							
+					
 				case 70 : 
 					{
 						
