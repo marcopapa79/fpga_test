@@ -459,7 +459,7 @@ uint32_t *pcie_bar_size_ats   = NULL;
 				if (!memcmp(debug_response,"\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc",8)==0)
 				{	
 					i++;
-					printf("Module:%2.2x Function: %2.2x Time Stamp: %2.2x.%2.2x Payload: 0x%2.2x.%2.2x.%2.2x.%2.2x\n" ,debug_response[0],debug_response[1],debug_response[3],debug_response[2],debug_response[7],debug_response[6],debug_response[5],debug_response[4]);
+					printf("Module:%2.2x Function: %2.2x Time Stamp: %2.2x.%2.2x Payload: 0x%2.2x.%2.2x.%2.2x.%2.2x\n" ,debug_response[0]&0x7F,((debug_response[1]<<1)|(debug_response[0]>>7)),debug_response[3],debug_response[2],debug_response[7],debug_response[6],debug_response[5],debug_response[4]);
 				} else ++count;
 			}
 			while ((count<sync_numb) && (i<length));
@@ -5525,15 +5525,14 @@ int main(int argc, char **argv)
 												
 						
 						// wait for LP messages
-							usleep(2*100*1000);
-							
+							//usleep(2*100*1000);
 									
 							for(int j = 0; j < 5; j++)
 							{	
 								read_debug_response(data_read, fd1, 8, NO_PRINT_VALUES);		
 								if (!memcmp(data_read,"\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc",8)==0)
-								{
-									printf("Module:%2.2x Function: %2.2x Time Stamp: %2.2x.%2.2x Payload: 0x%2.2x.%2.2x.%2.2x.%2.2x\n" ,data_read[0],data_read[1],data_read[3],data_read[2],data_read[7],data_read[6],data_read[5],data_read[4]);
+								{	
+									printf("Module:%2.2x Function: %2.2x Time Stamp: %2.2x.%2.2x Payload: 0x%2.2x.%2.2x.%2.2x.%2.2x\n" ,data_read[0]&0x7F,((data_read[1]<<1)|(data_read[0]>>7)),data_read[3],data_read[2],data_read[7],data_read[6],data_read[5],data_read[4]);
 								};
 							};
 						
