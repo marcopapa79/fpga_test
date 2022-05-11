@@ -2304,7 +2304,7 @@ int main(int argc, char **argv)
 		printf("Cmd_62: SRAM Write Test and Read back/verify from 0 to MAX size in Normal mode 64\n");
 		printf("Cmd_63: SRAM Write Read access\n");
 		printf("=============== DEBUG TEST ==================\n");
-		printf("Cmd_64: DEBUG enable\n");
+		printf("Cmd_64: DEBUG enable | control command\n");
 		printf("Cmd_65: DEBUG status read\n");
 		printf("Cmd_66: DEBUG serial command check\n");
 		printf("Cmd_67: DEBUG serial basic test IO module\n");
@@ -5128,7 +5128,8 @@ int main(int argc, char **argv)
 						printf("--  (5) Enable ATS and Disable SW tracing \n");
 						printf("--  (6) Enable ATS internal loop          \n");
 						printf("--  (7) Enable ATS disabled loop          \n");
-						printf("--  (8) Disable All                       \n");
+						printf("--  (8) Set Baudrate                      \n");
+						printf("--  (9) Disable All                       \n");
 						printf("-- =======================================\n");
 						
 						
@@ -5192,6 +5193,23 @@ int main(int argc, char **argv)
 								break;
 								
 							case 8:	
+								uint32_t baud_sel;
+								printf("\n\n Insert new Baudrate [0..4]: ");
+								printf("\n 0 = 115200 ");	
+								printf("\n 1 = 460800 ");	
+								printf("\n 2 = 921600 ");	
+								printf("\n 3 = 1843200 ");	
+								printf("\n 4 = 3916800 ");	
+
+								if ((ret_code=scanf("%d", &baud_sel))!=1)
+								{
+									printf("function read error %d\n",ret_code);
+								};
+								data_write[0]=baud_sel;
+								MWr32(mem_addr_ats + 0x23, data_write, 1, 1, NO_PRINT_VALUES); 
+								break;
+								
+							case 9:	
 								
 								data_write[0]=0x00;
 								MWr32(mem_addr_ats + 0x20, data_write, 1, 1, NO_PRINT_VALUES); 	
@@ -5522,19 +5540,10 @@ int main(int argc, char **argv)
 						printf("\n*** Sent Command 0x%2.2x \n",(data_write[0]>>4)&0xff);
 						
 						ats_wait_cmd_ack(data_read,fd1,data_write[0]);
-												
 						
 						// wait for LP messages
-							//usleep(2*100*1000);
-									
-							for(int j = 0; j < 5; j++)
-							{	
-								read_debug_response(data_read, fd1, 8, NO_PRINT_VALUES);		
-								if (!memcmp(data_read,"\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc",8)==0)
-								{	
-									printf("Module:%2.2x Function: %2.2x Time Stamp: %2.2x.%2.2x Payload: 0x%2.2x.%2.2x.%2.2x.%2.2x\n" ,data_read[0]&0x7F,((data_read[1]<<1)|(data_read[0]>>7)),data_read[3],data_read[2],data_read[7],data_read[6],data_read[5],data_read[4]);
-								};
-							};
+						ats_response_read(fd1, 3, 32, NO_PRINT_VALUES);		
+							
 						
 						close(fd1);
 						wait_to_continue();
