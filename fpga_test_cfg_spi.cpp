@@ -4827,8 +4827,8 @@ int main(int argc, char **argv)
 							IORd(pcie_bar_mem[1] + 0x0C, data_read, 1, 1, 1);
 						}; 
 						#endif 
-						data_write[0]=NORMAL_MODEx64;
-						IOWr(pcie_bar_mem[1] + 0x0C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						//data_write[0]=NORMAL_MODEx64;
+						//IOWr(pcie_bar_mem[1] + 0x0C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
 						// enable all bank
 						data_write[0]=0x0F;
 						IOWr(pcie_bar_mem[1] + 0x0D, data_write, 1, 1, 0, NO_PRINT_VALUES); 
@@ -5024,7 +5024,7 @@ int main(int argc, char **argv)
 									// max write byte size is Memory max size
 									if (test_size > bufferSize) test_size=bufferSize;
 									
-									#if _DEBUG	
+									#if 1//_DEBUG	
 									{	
 										printf("\n\n === read access size %d ===",sram_raccess_type);
 										printf("\n\n === %u bytes buffer ram===", bufferSize);
@@ -5032,12 +5032,12 @@ int main(int argc, char **argv)
 										printf("\n\n === data type %d===\n",data_type);
 									}; 
 									#endif 
-									
+								
 									i = 0;
 									while (i < test_size)
 										{
 											MRd32(mem_addr+i, &readBuffer[i], sram_raccess_type, sram_raccess_type, 1);//NO_PRINT_VALUES);
-											
+									
 											/*for(j = i; j < (i+sram_access_type); j++)
 											{
 												if ((writeBuffer[j]!=readBuffer[j]) && j<256) printf("\n Error at address %d: Expected: 0x%2.2x got: 0x%2.2x\n",j,writeBuffer[j]&0xff,readBuffer[j]&0xff); 
@@ -5070,7 +5070,7 @@ int main(int argc, char **argv)
 									data_write[2]=MIRROR_MODEx32;
 									data_write[3]=MIRROR_MODE;
 									// write sram mode
-									IOWr(pcie_bar_mem[1] + 0x0C, data_write, 1, 1, (sram_mode_num-1), NO_PRINT_VALUES); 
+									IOWr(pcie_bar_mem[1] + 0x0C, data_write, 1, 1, (sram_mode_num-1), NO_PRINT_VALUES);
 								
 									switch(sram_mode_num)
 									{
