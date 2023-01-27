@@ -180,8 +180,8 @@
 //       Date
 
 uint8_t ver_major = 1;
-uint8_t ver_minor = 12;
-char date[]="28/04/2022";
+uint8_t ver_minor = 13;
+char date[]="27/01/2023";
 
 /*===========================*/
 
@@ -2217,11 +2217,7 @@ int main(int argc, char **argv)
 		uint8_t	qli_cfg[8];
 		// io variable
 		uint32_t fb_width;
-		uint32_t st_ti_sel;
 		uint32_t dout_type;
-		uint32_t bp_cfg;
-		uint32_t din_num;
-		uint32_t dout_num;
 		uint8_t fb_mask;
 		uint8_t dout_cfg;
 		uint8_t Hw_ID;
@@ -2598,14 +2594,14 @@ int main(int argc, char **argv)
 					
 				case 11:
 					{
-						printf("-- =======================================================\n");
-						printf("--                IO Config Capabilities                  \n");	
-						printf("--        fb_width[2..0]       | ST/TI sel | BP CFG[3..0] \n");	
-						printf("-- 000 - 8 bits  100 - 40 bits |    1 ST   | 0000 32 bits \n");
-						printf("-- 001 - 16 bits 101 - 48 bits |    0 TI   | others TBD   \n");
-						printf("-- 010 - 24 bits 110 - 56 bits |           |              \n");
-						printf("-- 011 - 32 bits 111 - TBD     |           |              \n");
-						printf("-- =======================================================\n");
+						printf("-- ==================================================\n");
+						printf("--                IO Config Capabilities             \n");	
+						printf("--        fb_width[2..0]       |  Dout type sel      \n");	
+						printf("-- 000 - 8 bits  100 - 40 bits |    00000 TI         \n");
+						printf("-- 001 - 16 bits 101 - 48 bits |    00001 ST         \n");
+						printf("-- 010 - 24 bits 110 - 56 bits |    00010 ONSEMI     \n");
+						printf("-- 011 - 32 bits 111 - TBD     |                     \n");
+						printf("-- ==================================================\n");
 						
 						printf("Insert Feedback width params [0..6] (0 = 8 bits, .. ,6 = 56 bits): ");
 						if ((ret_code=scanf("%d", &fb_width))!=1)
@@ -2613,57 +2609,19 @@ int main(int argc, char **argv)
 							printf("function read error %d\n",ret_code);
 						};
 						
-						printf("Dout octal buffer: 1 = ST (feedback); 0 = TI (no feedback)\nST or TI ? : ");
-						if ((ret_code=scanf("%d", &st_ti_sel))!=1)
+						printf("Dout octal buffer: 2 = ONSEMI (feedback); 1 = ST (feedback); 0 = TI (no feedback)\n type ? : ");
+						if ((ret_code=scanf("%d", &dout_type))!=1)
 						{
 							printf("function read error %d\n",ret_code);
-						};
+						};							
 						
-						printf("BP Config ? [0..15]: ");
-						if ((ret_code=scanf("%d", &bp_cfg))!=1)
-						{
-							printf("function read error %d\n",ret_code);
-						};
-						
-						printf("Din num ? [0..55]: ");
-						if ((ret_code=scanf("%d", &din_num))!=1)
-						{
-							printf("function read error %d\n",ret_code);
-						};
-						
-						printf("Dout num ? [0..55]: ");
-						if ((ret_code=scanf("%d", &dout_num))!=1)
-						{
-							printf("function read error %d\n",ret_code);
-						};
-											
-						printf("Feedback Mask ? 0xFF: 0x");
-						if ((ret_code=scanf("%2hhx", &fb_mask))!=1)
-						{
-							printf("function read error %d\n",ret_code);
-						};
-											
-						printf("Dout Cfg ? 0xFF: 0x");
-						if ((ret_code=scanf("%2hhx", &dout_cfg))!=1)
-						{
-							printf("function read error %d\n",ret_code);
-						};
-						
-						data_buffer[0]=(  ((bp_cfg & 0x0F)<<4) | ((st_ti_sel & 0x01)<<3) | (fb_width & 0x07)  );
+						data_buffer[0]=(  ((dout_type & 0x1F)<<3) | (fb_width & 0x07)  );
 						printf("byte24 is %2.2x\n",data_buffer[0]);
-						data_buffer[1]=(  (din_num & 0x3F));
-						printf("byte25 is %d\n",data_buffer[1]);
-						data_buffer[2]=(  (dout_num & 0x3F));
-						printf("byte26 is %d\n",data_buffer[2]);
-						data_buffer[3]=(  (fb_mask & 0xFF));
-						printf("byte27 is %2.2x\n",data_buffer[3]);
-						data_buffer[4]=(  (dout_cfg & 0xFF));
-						printf("byte28 is %2.2x\n",data_buffer[4]);
 						
 						start_addr[2]= 0x00;
 						start_addr[1]= 0x00;
 						start_addr[0]= 0x18;
-						byte_lenght = 5;
+						byte_lenght = 1;
 						
 						page_program(start_addr,data_buffer,byte_lenght,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
 						
@@ -3334,14 +3292,14 @@ int main(int argc, char **argv)
 					
 				case 31:
 					{
-						printf("-- =======================================================\n");
-						printf("--                IO Config Capabilities                  \n");	
-						printf("--        fb_width[2..0]       | ST/TI sel | BP CFG[3..0] \n");	
-						printf("-- 000 - 8 bits  100 - 40 bits |    1 ST   | 0000 32 bits \n");
-						printf("-- 001 - 16 bits 101 - 48 bits |    0 TI   | others TBD   \n");
-						printf("-- 010 - 24 bits 110 - 56 bits |           |              \n");
-						printf("-- 011 - 32 bits 111 - TBD     |           |              \n");
-						printf("-- =======================================================\n");
+						printf("-- ==================================================\n");
+						printf("--                IO Config Capabilities             \n");	
+						printf("--        fb_width[2..0]       |  Dout type sel      \n");	
+						printf("-- 000 - 8 bits  100 - 40 bits |    00000 TI         \n");
+						printf("-- 001 - 16 bits 101 - 48 bits |    00001 ST         \n");
+						printf("-- 010 - 24 bits 110 - 56 bits |    00010 ONSEMI     \n");
+						printf("-- 011 - 32 bits 111 - TBD     |                     \n");
+						printf("-- ==================================================\n");
 						
 						printf("Insert Feedback width params [0..6] (0 = 8 bits, .. ,6 = 56 bits): ");
 						if ((ret_code=scanf("%d", &fb_width))!=1)
@@ -3349,57 +3307,19 @@ int main(int argc, char **argv)
 							printf("function read error %d\n",ret_code);
 						};
 						
-						printf("Dout octal buffer: 1 = ST (feedback); 0 = TI (no feedback)\nST or TI ? : ");
-						if ((ret_code=scanf("%d", &st_ti_sel))!=1)
+						printf("Dout octal buffer: 2 = ONSEMI (feedback); 1 = ST (feedback); 0 = TI (no feedback)\n type ? : ");
+						if ((ret_code=scanf("%d", &dout_type))!=1)
 						{
 							printf("function read error %d\n",ret_code);
-						};
+						};							
 						
-						printf("BP Config ? [0..15]: ");
-						if ((ret_code=scanf("%d", &bp_cfg))!=1)
-						{
-							printf("function read error %d\n",ret_code);
-						};
-						
-						printf("Din num ? [0..55]: ");
-						if ((ret_code=scanf("%d", &din_num))!=1)
-						{
-							printf("function read error %d\n",ret_code);
-						};
-						
-						printf("Dout num ? [0..55]: ");
-						if ((ret_code=scanf("%d", &dout_num))!=1)
-						{
-							printf("function read error %d\n",ret_code);
-						};
-											
-						printf("Feedback Mask ? 0xFF: 0x");
-						if ((ret_code=scanf("%2hhx", &fb_mask))!=1)
-						{
-							printf("function read error %d\n",ret_code);
-						};
-											
-						printf("Dout Cfg ? 0xFF: 0x");
-						if ((ret_code=scanf("%2hhx", &dout_cfg))!=1)
-						{
-							printf("function read error %d\n",ret_code);
-						};
-						
-						data_buffer[0]=(  ((bp_cfg & 0x0F)<<4) | ((st_ti_sel & 0x01)<<3) | (fb_width & 0x07)  );
+						data_buffer[0]=(  ((dout_type & 0x1F)<<3) | (fb_width & 0x07)  );
 						printf("byte24 is %2.2x\n",data_buffer[0]);
-						data_buffer[1]=(  (din_num & 0x3F));
-						printf("byte25 is %d\n",data_buffer[1]);
-						data_buffer[2]=(  (dout_num & 0x3F));
-						printf("byte26 is %d\n",data_buffer[2]);
-						data_buffer[3]=(  (fb_mask & 0xFF));
-						printf("byte27 is %2.2x\n",data_buffer[3]);
-						data_buffer[4]=(  (dout_cfg & 0xFF));
-						printf("byte28 is %2.2x\n",data_buffer[4]);
 						
 						start_addr[2]= 0x3F;
 						start_addr[1]= 0xC0;
 						start_addr[0]= 0x18;
-						byte_lenght = 5;
+						byte_lenght = 1;
 						
 						page_program(start_addr,data_buffer,byte_lenght,FPGA_ROM_BASE,CS_FPGA_ROM_ENA,PRINT_VALUES);
 						
