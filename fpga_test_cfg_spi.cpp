@@ -204,7 +204,7 @@ uint32_t sizeSecsBuffer = 32*16;
 
 #define SRAM_TYPE(x) ((x) == 0?"Standard SRAM":((x) == 1)?"Fast SRAM":"MRAM")
 #define QLI_CAPAB(x) ((x) == 0?"Not_Present":((x) == 1)?"1-wire or 2-wires":"1-wire, 2-wires or pwm")
-#define IO_TYPE(x)   ((x) == 0?"TI (without feedback)":"ST with feedback")
+#define IO_TYPE(x)   ((x) == 0?"TI (without feedback)":((x) == 1)?"ST with feedback":"ONSEMI with feedback")
 #define CK_MATCH(x)  ((x) == 0?"Checksum wrong":"Checksum match")
 #define PULL_UP(x)   ((x) == 0?"10k pull-up":"10k-1k in parallel pull-up")
 #define CCTALK_ENA(x)((x) == 0?"disabled":"enabled")
@@ -1913,8 +1913,9 @@ int main(int argc, char **argv)
 	
 	printf("\n\n === CONFIGURATION ===");
 	IORd(pcie_bar_io[0] + 0x26, data_read, 1, 1, NO_PRINT_VALUES);
-	printf("\n DOUT_TYPE \t= %s", IO_TYPE((data_read[0]>>3)&0x01));
-	printf("\n FEEDBACK WIDTH\t= %d", (((data_read[0]&0x07)+1)*8));
+	printf("\n DOUT_TYPE \t= %s", IO_TYPE((data_read[0]>>3)&0x1F));
+	printf("\n FEEDBACK WIDTH\t= %d", (((data_read[0]&0x07)+1)*8));	
+	printf("\n ===================================");
 	
 	#if _OLDCFGROM	
 		{	
@@ -2025,13 +2026,13 @@ int main(int argc, char **argv)
 	printf("\n       Sector 0");	
 	printf("\n Checksum 64bytes \t= %2.2x", (data_read[0]&0xff));
 	printf("\n Checksum 64bytes ok \t= %s\n", CK_MATCH(data_read[1]&0x01));
-	#if _OLDCFGROM	
+	//#if _OLDCFGROM	
 		{	
 	printf("\n       Sector 2");	
 	printf("\n Checksum 64bytes \t= %2.2x", (data_read[2]&0xff));
 	printf("\n Checksum 64bytes ok \t= %s", CK_MATCH((data_read[1]>>1)&0x01));
 		}; 
-	#endif 
+	//#endif 
   
 	
 	printf("\n\n === TEST FIRST BYTE SRAM ===");
@@ -2217,6 +2218,7 @@ int main(int argc, char **argv)
 		// io variable
 		uint32_t fb_width;
 		uint32_t st_ti_sel;
+		uint32_t dout_type;
 		uint32_t bp_cfg;
 		uint32_t din_num;
 		uint32_t dout_num;
@@ -2312,6 +2314,8 @@ int main(int argc, char **argv)
 		printf("=============== DIO TEST ==================\n");
 		printf("Cmd_70: DIN status\n");
 		printf("Cmd_71: DIN interrupt test\n");
+		printf("=============== CFG PCIe SPACE ==================\n");
+		printf("Cmd_80: Write IO Configuration Space\n");
 		printf("=============== PCIe utility ==================\n");
 		printf("Cmd_99: Get PCIe status/Enable PCIe/Set command reg\n");
 	
@@ -5816,7 +5820,181 @@ int main(int argc, char **argv)
 						break;
 						return 0;
 					}  	
+				
+				case 72 : 
+					{
+						// disable debounce
+						data_write[0] = 0x00; 
+						data_write[1] = 0x00;  
+						data_write[2] = 0x00; 	
+						data_write[3] = 0x00;  
+							
+						IOWr(pcie_bar_io[0] + 0x3C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3D, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3E, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3F, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x40, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x41, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x42, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x43, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+							
+							
+						printf("-- ============================\n");
+						printf("--          Dout All ON        \n");
+						printf("-- ============================\n");
+						printf("\n\n");
+						
+						printf("-- ============================\n");
+						// all FF
+						
+							data_write[0] = 0xff;  	
+							data_write[1] = 0xff;  	
+							data_write[2] = 0xff;   	
+							data_write[3] = 0xff;  		
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						
+			
+							data_write[4] = 0xff; 
+							data_write[5] = 0xff; 
+							data_write[6] = 0xff; 	
+							data_write[7] = 0xff; 
+							
+							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 4, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 5, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 6, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 7, NO_PRINT_VALUES); 
+					
+							usleep(4*1000*1000);
+					
+							
+							data_write[0] = 0x00;  	
+							data_write[1] = 0x00;  	
+							data_write[2] = 0x00;   	
+							data_write[3] = 0x00;  		
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						
+			
+							data_write[4] = 0x00; 
+							data_write[5] = 0x00;  
+							data_write[6] = 0x00; 	
+							data_write[7] = 0x00;  
+							
+							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 4, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 5, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 6, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 7, NO_PRINT_VALUES); 
+					
+							usleep(4*1000*1000);
+					
+							printf("\n");
+							printf("-- ============================\n");
 								
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}  	
+				
+				case 73 : 
+					{
+						// disable debounce
+						data_write[0] = 0x00; 
+						data_write[1] = 0x00;  
+						data_write[2] = 0x00; 	
+						data_write[3] = 0x00;  
+							
+						IOWr(pcie_bar_io[0] + 0x3C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3D, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3E, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3F, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x40, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x41, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x42, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x43, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+							
+						printf(" Select Dout[0..7] value ? : 0x");
+						if ((ret_code=scanf("%2hhx", &data_read[0]))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};	
+						
+						printf("-- ============================\n");
+						printf("--          Dout All ON        \n");
+						printf("-- ============================\n");
+						printf("\n\n");
+						
+						printf("-- ============================\n");
+						// all FF
+						
+							data_write[0] = data_read[0];//0xff;  	
+							data_write[1] = data_read[0];//0xff;  	
+							data_write[2] = 0xff;   	
+							data_write[3] = 0xff;  		
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						
+			
+							data_write[4] = 0xff; 
+							data_write[5] = 0xff; 
+							data_write[6] = 0xff; 	
+							data_write[7] = 0xff; 
+							
+							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 4, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 5, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 6, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 7, NO_PRINT_VALUES); 
+					
+										
+							printf("\n");
+							printf("-- ============================\n");
+								
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}  
+
+				case 80:
+					{
+						printf("-- ==================================================\n");
+						printf("--                IO Config Capabilities             \n");	
+						printf("--        fb_width[2..0]       |  Dout type sel      \n");	
+						printf("-- 000 - 8 bits  100 - 40 bits |    00000 TI         \n");
+						printf("-- 001 - 16 bits 101 - 48 bits |    00001 ST         \n");
+						printf("-- 010 - 24 bits 110 - 56 bits |    00010 ONSEMI     \n");
+						printf("-- 011 - 32 bits 111 - TBD     |                     \n");
+						printf("-- ==================================================\n");
+						
+						printf("Insert Feedback width params [0..6] (0 = 8 bits, .. ,6 = 56 bits): ");
+						if ((ret_code=scanf("%d", &fb_width))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+						
+						printf("Dout octal buffer: 2 = ONSEMI (feedback); 1 = ST (feedback); 0 = TI (no feedback)\n type ? : ");
+						if ((ret_code=scanf("%d", &dout_type))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};						
+						
+						data_write[0]=(  ((dout_type & 0x1F)<<3) | (fb_width & 0x07)  );
+						printf("byte26 is %2.2x\n",data_write[0]);
+						
+						IOWr(pcie_bar_io[0] + 0x26, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+												
+						wait_to_continue();
+						break;
+					}
+					
+						
 				case 99 : 
 					{
 						
