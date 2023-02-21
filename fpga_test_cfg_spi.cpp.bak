@@ -5878,6 +5878,7 @@ int main(int argc, char **argv)
 							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
 							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
 							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+							usleep(1*1000);
 			/*
 							data_write[4] = data_read[0];//0xff; 
 							data_write[5] = data_read[1];//0xff; 
