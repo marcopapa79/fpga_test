@@ -459,7 +459,8 @@ uint32_t *pcie_bar_size_ats   = NULL;
 				if (!memcmp(debug_response,"\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc",8)==0)
 				{	
 					i++;
-					printf("Module:%2.2x Function: %2.2x Time Stamp: %2.2x.%2.2x Payload: 0x%2.2x.%2.2x.%2.2x.%2.2x\n" ,debug_response[0]&0x7F,((debug_response[1]<<1)|(debug_response[0]>>7)),debug_response[3],debug_response[2],debug_response[7],debug_response[6],debug_response[5],debug_response[4]);
+					printf("Module:%2.2x Function: %2.2x Time Stamp: %2.2x.%2.2x Payload: 0x%2.2x.%2.2x.%2.2x.%2.2x\n" ,debug_response[0]&0x7F,((debug_response[1]<<1)|(debug_response[0]>>7))&0x7F,debug_response[3],debug_response[2],debug_response[7],debug_response[6],debug_response[5],debug_response[4]);
+					printf("Module:%2.2x Function: %2.2x Zeros: %2.2x 8bits: %2.2x \n" ,debug_response[0]&0x7F,((debug_response[1]<<1)|(debug_response[0]>>7))&0x7F,(debug_response[3]>>3)&0x1F,((debug_response[3]<<5)&0xE0|((debug_response[2]>>3)&0x1F)));
 				} else ++count;
 			}
 			while ((count<sync_numb) && (i<length));
@@ -1621,6 +1622,33 @@ uint32_t *pcie_bar_size_ats   = NULL;
 
 		}
 		
+		/* 
+		 * ===  FUNCTION  ======================================================================
+		 *         Name:  wait_i2c_sr_ready_and_clear
+		 *  Description:  wait_i2c_sr_ready_and_clear
+		 *  Requiremets:  		 
+		 *				  data_rd 	   = status register byte 0 content
+		 *				  spi_offset   = (0x20 base_spi, 0x48 cfg_rom spi)
+		 * =====================================================================================
+		 */
+		void wait_i2c_sr_ready_and_clear ()//(uint8_t spi_offset)
+		{
+			uint8_t *data_rd = (uint8_t *)calloc (3,sizeof(uint8_t));
+			uint8_t *data_wr = (uint8_t *)calloc (3,sizeof(uint8_t));
+			do{ 
+				IORd(pcie_bar_io[0] + 0x28, data_rd, 1, 1, NO_PRINT_VALUES);      
+			} while ((data_rd[0] & 0x01)==0x00);
+			//printf("\n Got status register = 0x%2.2x\n",data_rd[0]&0xff); 
+			
+			IORd(pcie_bar_io[0] + 0x2F, data_rd, 1, 1, NO_PRINT_VALUES); 
+			printf("\n Local int = 0x%2.2x\n",data_rd[0]&0xff); 
+			// clr interrupt i2c	
+			data_wr[0]= 0x01;
+			IOWr(pcie_bar_io[0] + 0x2F, data_wr, 1, 1, 0, NO_PRINT_VALUES); 
+			data_wr[0]= 0x00;
+			IOWr(pcie_bar_io[0] + 0x2F, data_wr, 1, 1, 0, NO_PRINT_VALUES); 
+		}	
+		
 		// ******************************************************************************************
 		int openSSLEnc(uint8_t *key, uint8_t *iv, aes_size_t aes_size, aes_mode_t aes_mode,
 		  uint8_t *cipher_data, uint8_t *data, uint32_t data_length)
@@ -1915,6 +1943,11 @@ int main(int argc, char **argv)
 	IORd(pcie_bar_io[0] + 0x26, data_read, 1, 1, NO_PRINT_VALUES);
 	printf("\n DOUT_TYPE \t= %s", IO_TYPE((data_read[0]>>3)&0x1F));
 	printf("\n FEEDBACK WIDTH\t= %d", (((data_read[0]&0x07)+1)*8));	
+	IORd(pcie_bar_io[0] + 0x70, data_read, 4, 1, NO_PRINT_VALUES);
+	printf("\n Dout[7..0] feedback disable value \t= 0x%2.2x", (data_read[0]&0xff));
+	printf("\n Dout[15..8] feedback disable value \t= 0x%2.2x", (data_read[1]&0xff));
+	printf("\n Dout[23..16] feedback disable value \t= 0x%2.2x", (data_read[2]&0xff));
+	printf("\n Dout[31..24] feedback disable value \t= 0x%2.2x", (data_read[3]&0xff));
 	printf("\n ===================================");
 	
 	#if _OLDCFGROM	
@@ -1950,6 +1983,14 @@ int main(int argc, char **argv)
 	#if 1//_DEBUG	
 		{	
  	    printf("\n SRAM CFG PARAMS ID \t  = %2.2x\n", data_read[1]&0xff);
+ 	  }; 
+	#endif 
+	data_write[0] = 0x76;
+	IOWr(pcie_bar_mem[1] + 0x23, data_write, 1, 1, 0, NO_PRINT_VALUES);
+	IORd(pcie_bar_mem[1] + 0x22, data_read, 2,1, NO_PRINT_VALUES);	
+	#if 1//_DEBUG	
+		{	
+ 	    printf("\n SRAM SIZE ID \t  = %2.2x\n", data_read[1]&0xff);
  	  }; 
 	#endif 
 	printf("\n Number of Chip = %d", (pot2(data_read[1]&0x03)));
@@ -2058,7 +2099,7 @@ int main(int argc, char **argv)
 	
 	
 	uint32_t system_return;
-	char path [1024]="sudo ./../git/libsecuress/bin/x64/test-libsecs -enc -k 0   -i ./../git/libsecuress/bin/x64/original_key    -o ./../git/libsecuress/bin/x64/key_enc  > /dev/null";
+	char path [1024]="sudo ./../git/libsecuress/bin/x64/test-libsecs -enc -k 0   -i ./../git/libsecuress/bin/x64/original_key_m    -o ./../git/libsecuress/bin/x64/key_enc  > /dev/null";
 	
 	sprintf (path, "sudo insmod ./../git/drvsecuress/linux/qxtsecs.ko");
 	system_return = system(path);
@@ -2228,6 +2269,9 @@ int main(int argc, char **argv)
 		uint8_t cctalk2_ena;
 		uint8_t cctalk2_pu;
 		uint8_t check_sum=0;
+		// PWM
+		uint32_t res_div;
+		uint32_t pwm_duty_cyc[9];
 		// 
 		uint32_t check_id_error=0;
 		//uint32_t repetition=0;
@@ -2316,6 +2360,12 @@ int main(int argc, char **argv)
 		printf("Cmd_75: Check Feedback\n");
 		printf("=============== CFG PCIe SPACE ==================\n");
 		printf("Cmd_80: Write IO Configuration Space\n");
+		printf("=============== PWM utility ==================\n");
+		printf("Cmd_81: Setup PWM: Clock resolution\n");
+		printf("Cmd_82: Setup PWM: Channel duty cycle\n");
+		printf("=============== i2c CPLD utility=================\n");
+		printf("Cmd_90: Write data i2c to cpld\n");
+		printf("Cmd_91: Read data i2c from cpld\n");
 		printf("=============== PCIe utility ==================\n");
 		printf("Cmd_99: Get PCIe status/Enable PCIe/Set command reg\n");
 	
@@ -3551,7 +3601,7 @@ int main(int argc, char **argv)
 						aes_size_t aes_size[AES_SIZE_MODES] = { AES_128, AES_256 };
 						aes_mode_t aes_mode[AES_SIZE_MODES] = { AES_ECB, AES_CBC };
 						
-						char key_file_name[]="../git/libsecuress/bin/x64/original_key";
+						char key_file_name[]="../git/libsecuress/bin/x64/original_key_m";
 						int32_t key_file;
 						uint32_t size;
 						uint32_t key_idx;
@@ -3596,7 +3646,7 @@ int main(int argc, char **argv)
 						
 						for (key_idx = 0; key_idx<16; key_idx++)
 						{ 	
-							sprintf (path, "sudo ./../git/libsecuress/bin/x64/test-libsecs -enc -k %d -i ./../git/libsecuress/bin/x64/original_key -o ./../git/libsecuress/bin/x64/key_enc%d > /dev/null", key_idx, key_idx);
+							sprintf (path, "sudo ./../git/libsecuress/bin/x64/test-libsecs -enc -k %d -i ./../git/libsecuress/bin/x64/original_key_m -o ./../git/libsecuress/bin/x64/key_enc%d > /dev/null", key_idx, key_idx);
 							system_return = system(path);
 							if (system_return != 0)
 							{
@@ -5482,16 +5532,20 @@ int main(int argc, char **argv)
 				case 70 : 
 					{
 						
-						
+							
 						printf("-- ============================\n");
 						printf("--       Get DIN status        \n");	
 						printf("-- ============================\n");
 						
-						IORd(pcie_bar_io[0] + 0x00, data_read, 4, 1, NO_PRINT_VALUES);      
-						printf("\n Din[31..0]  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
-						IORd(pcie_bar_io[0] + 0x04, data_read, 4, 1, NO_PRINT_VALUES);      
-						printf("\n Din[63..32] = 0x%2.2x.%2.2x.%2.2x.%2.2x\n",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
-						
+						for(i = 0; i < 32; i++)
+						{
+							IORd(pcie_bar_io[0] + 0x00, data_read, 4, 1, NO_PRINT_VALUES);      
+							printf("\n Din[31..0]  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							IORd(pcie_bar_io[0] + 0x04, data_read, 4, 1, NO_PRINT_VALUES);      
+							printf("\n Din[63..32] = 0x%2.2x.%2.2x.%2.2x.%2.2x\n",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							
+							usleep(1*1000*1000);
+						}
 						wait_to_continue();
 						break;
 						return 0;
@@ -5925,7 +5979,7 @@ int main(int argc, char **argv)
 					
 					
 				case 74 : 
-					{
+					{	
 						// disable debounce
 						data_write[0] = 0x00; 
 						data_write[1] = 0x00;  
@@ -5968,15 +6022,16 @@ int main(int argc, char **argv)
 						
 						printf("-- ============================\n");
 						// all FF
+						// walking 1
 						
 							data_write[0] = data_read[0];//0xff;  	
 							data_write[1] = data_read[1];//0xff;  	
 							data_write[2] = data_read[2];//0xff;   	
 							data_write[3] = data_read[3];//0xff;  		
-							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, 1);//NO_PRINT_VALUES); 
-							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, 1);//NO_PRINT_VALUES); 
-							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, 1);//NO_PRINT_VALUES); 
-							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, 1);//NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
 						
 			
 							/*data_write[4] = data_read[0];//0xff; 
@@ -6066,7 +6121,229 @@ int main(int argc, char **argv)
 						break;
 					}
 					
+				case 81:
+					{
+						printf("-- ======================================================\n");
+						printf("--             PWM Setup clock resolution                \n");	
+						printf("-- 0 = 8MHz   |  1 = 4 MHz  |  2 = 2MHz   |  4 = 1MHz    \n");	
+						printf("-- 8 = 500kHz | 16 = 250kHz | 32 = 125kHz | 64 = 62,5kHz \n");
+						printf("-- ======================================================\n");
 						
+						printf("Insert Setup resolution [0..7] (0 = 8 MHz, .. 7 = 31 kHz): ");
+						if ((ret_code=scanf("%d", &res_div))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+											
+						
+						data_write[0]=(res_div & 0xFF);
+						//printf("byte26 is %2.2x\n",data_write[0]);
+						MWr32(mem_addr_led + 0x3E, data_write, 1, 1, NO_PRINT_VALUES); 
+						MRd32(mem_addr_led + 0x3C, data_read, 4, 1, NO_PRINT_VALUES); 
+						
+						printf("\n Setup Clock resolution= 0x%2.2x\n",data_read[2]&0xff); 
+						
+						wait_to_continue();
+						break;
+					}
+						
+				case 82:
+					{
+						printf("-- ======================================================\n");
+						printf("--             PWM Setup clock resolution                \n");	
+						printf("-- 0 = 8MHz   |  1 = 4 MHz  |  2 = 2MHz   |  4 = 1MHz    \n");	
+						printf("-- 8 = 500kHz | 16 = 250kHz | 32 = 125kHz | 64 = 62,5kHz \n");
+						printf("-- ======================================================\n");
+						
+						printf("Insert Setup duty_cyc [0..7] (0 = 8 MHz, .. 7 = 31 kHz): ");
+						if ((ret_code=scanf("%d", &pwm_duty_cyc[0]))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+											
+						
+						data_write[0]=pwm_duty_cyc[0];
+						//data_write[0]=0x40;
+						//printf("byte26 is %2.2x\n",data_write[0]);
+						
+						MWr32(mem_addr_led + 0x40, data_write, 1, 1, NO_PRINT_VALUES); 
+						MWr32(mem_addr_led + 0x41, data_write, 1, 1, NO_PRINT_VALUES); 
+						MWr32(mem_addr_led + 0x42, data_write, 1, 1, NO_PRINT_VALUES); 
+						MWr32(mem_addr_led + 0x43, data_write, 1, 1, NO_PRINT_VALUES); 
+						MWr32(mem_addr_led + 0x44, data_write, 1, 1, NO_PRINT_VALUES); 
+						MWr32(mem_addr_led + 0x45, data_write, 1, 1, NO_PRINT_VALUES); 
+						MWr32(mem_addr_led + 0x46, data_write, 1, 1, NO_PRINT_VALUES); 
+						MWr32(mem_addr_led + 0x47, data_write, 1, 1, NO_PRINT_VALUES); 
+						
+						data_write[0]=0x01;
+						MWr32(mem_addr_led + 0x3F, data_write, 1, 1, NO_PRINT_VALUES); 
+
+						MRd32(mem_addr_led + 0x40, data_read, 4, 1, NO_PRINT_VALUES); 
+						printf("\n PWM_dutycycle    = %d",data_read[0]); 
+						MRd32(mem_addr_led + 0x3F, data_read, 1, 1, NO_PRINT_VALUES); 
+						printf("\n New_dt_cyc= 0x%2.2x\n",data_read[0]&0x01); 
+												
+						wait_to_continue();
+						break;
+					}
+					
+				case 90:
+					{			
+						// setup and enable I2C engine
+							// Enable i2c	
+							data_write[0]= 0x80;
+							IOWr(pcie_bar_io[0] + 0x2D, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							// clr interrupt i2c	
+							data_write[0]= 0x01;
+							IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							data_write[0]= 0x00;
+							IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							// prescaler
+							data_write[0]= 0x41;
+							IOWr(pcie_bar_io[0] + 0x2C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							// enable interrupt
+							data_write[0]= 0x81;
+							IOWr(pcie_bar_io[0] + 0x28, data_write, 1, 1, 0, NO_PRINT_VALUES);
+							
+						// leggo status register e printo
+						IORd(pcie_bar_io[0] + 0x28, data_read, 1, 1, NO_PRINT_VALUES);      
+						printf("\n Got status register = 0x%2.2x\n",data_read[0]&0xff); 
+						// scrivere indirizzo A4	
+						data_write[0]= 0xA8;
+						IOWr(pcie_bar_io[0] + 0x2E, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						// scrivere comando start 90
+						data_write[0]= 0x90;
+						IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						wait_i2c_sr_ready_and_clear ();
+						
+						// scrivere indirizzo 0
+						data_write[0]= 0x00;
+						IOWr(pcie_bar_io[0] + 0x2E, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						// scrivere comando write 10
+						data_write[0]= 0x10;
+						IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						wait_i2c_sr_ready_and_clear ();
+						
+						for(i = 0; i < 63; i++)
+						{
+							// scrivere dato
+							//(uint8_t)(rand() & 0x000000FF);
+							//data_write[0]= (0xAA);
+							data_write[0]= (uint8_t)( i & 0xFF );
+							//if (i < 8 ) data_write[0]= (0x01<<i);
+							//if (i > 7 && i < 15) data_write[0]= (0x80>>(i-8));
+							IOWr(pcie_bar_io[0] + 0x2E, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							printf("\n Write data = 0x%2.2x\n",data_write[0]&0xff); 
+							// scrivere comando write 10
+							data_write[0]= 0x10;
+							IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							wait_i2c_sr_ready_and_clear ();
+						}				
+
+							// scrivere ultimo dato
+							data_write[0]=  (uint8_t)( i & 0xFF );
+							IOWr(pcie_bar_io[0] + 0x2E, data_write, 1, 1, 0, NO_PRINT_VALUES);  
+							printf("\n Write data = 0x%2.2x\n",data_write[0]&0xff); 
+							// scrivere write stop nack 58
+							data_write[0]= 0x58;
+							IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							wait_i2c_sr_ready_and_clear ();
+						
+						// disable i2c
+						
+						// clr interrupt i2c	
+						data_write[0]= 0x01;
+						IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						data_write[0]= 0x00;
+						IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						//  disable i2C: 
+						data_write[0]= 0x00;
+						IOWr(pcie_bar_io[0] + 0x2D, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						
+						wait_to_continue();
+						break;
+					}	
+					
+				case 91:
+					{			
+						
+						// setup and enable I2C engine
+							// Enable i2c	
+							data_write[0]= 0x80;
+							IOWr(pcie_bar_io[0] + 0x2D, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							// clr interrupt i2c	
+							data_write[0]= 0x01;
+							IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							data_write[0]= 0x00;
+							IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							// prescaler
+							data_write[0]= 0x41;
+							IOWr(pcie_bar_io[0] + 0x2C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							// enable interrupt
+							data_write[0]= 0x81;
+							IOWr(pcie_bar_io[0] + 0x28, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							
+						// leggo status register e printo
+						IORd(pcie_bar_io[0] + 0x28, data_read, 1, 1, NO_PRINT_VALUES);      
+						printf("\n Got status register = 0x%2.2x\n",data_read[0]&0xff); 
+						// scrivere indirizzo A4	
+						data_write[0]= 0xA8;
+						IOWr(pcie_bar_io[0] + 0x2E, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						// scrivere comando start 90
+						data_write[0]= 0x90;
+						IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						wait_i2c_sr_ready_and_clear ();
+						
+						// scrivere indirizzo 0
+						data_write[0]= 0x00;
+						IOWr(pcie_bar_io[0] + 0x2E, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						// scrivere comando write 10
+						data_write[0]= 0x10;
+						IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						wait_i2c_sr_ready_and_clear ();
+						
+						// leggi primo byte
+						data_write[0]= 0xA9;
+						IOWr(pcie_bar_io[0] + 0x2E, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						// scrivere comando start 90
+						data_write[0]= 0x90;
+						IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						wait_i2c_sr_ready_and_clear ();
+						
+						for(i = 0; i < 15; i++)
+						{
+							// scrivere comando read 20
+							data_write[0]= 0x20;
+							IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							wait_i2c_sr_ready_and_clear ();
+							// controlla dato
+							IORd(pcie_bar_io[0] + 0x2E, data_read, 1, 1, NO_PRINT_VALUES);      
+							printf("\n Data received = 0x%2.2x\n",data_read[0]&0xff); 
+						}				
+
+							// scrivere stop read-nack 68
+							data_write[0]= 0x68;
+							IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							wait_i2c_sr_ready_and_clear ();
+							// controlla dato
+							IORd(pcie_bar_io[0] + 0x2E, data_read, 1, 1, NO_PRINT_VALUES);      
+							printf("\n Data received = 0x%2.2x\n",data_read[0]&0xff); 
+						
+						// disable i2c
+						
+						// clr interrupt i2c	
+						data_write[0]= 0x01;
+						IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						data_write[0]= 0x00;
+						IOWr(pcie_bar_io[0] + 0x2F, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						//  disable i2C: 
+						data_write[0]= 0x00;
+						IOWr(pcie_bar_io[0] + 0x2D, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						
+						wait_to_continue();
+						break;
+					}	
+					
 				case 99 : 
 					{
 						
