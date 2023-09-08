@@ -180,8 +180,8 @@
 //       Date
 
 uint8_t ver_major = 1;
-uint8_t ver_minor = 14;
-char date[]="07/02/2023";
+uint8_t ver_minor = 15;
+char date[]="08/09/2023";
 
 /*===========================*/
 
