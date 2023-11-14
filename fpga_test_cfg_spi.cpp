@@ -214,6 +214,10 @@ uint32_t sizeSecsBuffer = 32*16;
 #define KEY_17th(x)  ((x) == 0?"KEY17_th_feature not supported":"KEY17_th_feature supported")
 #define MASTER_KEY(x)((x) == 0?"Master Key Feature not supported":"Master Key Feature supported")
 #define MASTER_KEY_FROM_LP(x)((x) == 1?"MASTER KEY FLAG ASSERTED":"MASTER KEY FLAG DEASSERTED")
+#define USER(x)      ((x) == 0?"not user mode":"user mode")
+#define BIOS(x)      ((x) == 0?"BIOS didn't wrote enc aes keys":"BIOS wrote enc aes keys")
+#define M_KEY_RDY(x) ((x) == 0?"LP mast key not ready":"LP mast key ready")
+#define EXP17THKEY(x)((x) == 0?"17th key not expanded":"17th key expanded")
 
 
 #define ENABLE_ATS(x)((x) == 1?"ATS_ENABLED":"ATS_DISABLED")
@@ -1985,7 +1989,7 @@ int main(int argc, char **argv)
  	    printf("\n SRAM CFG PARAMS ID \t  = %2.2x\n", data_read[1]&0xff);
  	  }; 
 	#endif 
-	data_write[0] = 0x76;
+	data_write[0] = 0x75;
 	IOWr(pcie_bar_mem[1] + 0x23, data_write, 1, 1, 0, NO_PRINT_VALUES);
 	IORd(pcie_bar_mem[1] + 0x22, data_read, 2,1, NO_PRINT_VALUES);	
 	#if 1//_DEBUG	
@@ -2059,7 +2063,12 @@ int main(int argc, char **argv)
 	printf("\n RSA presence    \t= %s", RSA((data_read[0]>>1)&0x01));
 	printf("\n KEY17th feature \t= %s", KEY_17th((data_read[0]>>2)&0x01));
 	printf("\n Master KEY feature \t= %s", MASTER_KEY((data_read[0]>>3)&0x01));
-	
+	IORd(pcie_bar_secs[1] + 0x3E, data_read, 1, 1, 1);//NO_PRINT_VALUES);//NO_PRINT_VALUES);
+	printf("\n User Mode    \t= %s", USER(data_read[0]&0x01));
+	printf("\n BIOS_Key written    \t= %s", BIOS((data_read[0]>>1)&0x01));
+	printf("\n LP master key ready \t= %s", M_KEY_RDY((data_read[0]>>2)&0x01));
+	printf("\n expanded 17th key \t= %s", EXP17THKEY((data_read[0]>>3)&0x01));
+
 	//printf("\n data ena \t= %d\n", data_read[0]);
 	
 	IORd(pcie_bar_io[0] + 0x10, data_read, 4,1, NO_PRINT_VALUES);
@@ -2084,7 +2093,15 @@ int main(int argc, char **argv)
 	MWr32(mem_addr, data_write, 4, 4, NO_PRINT_VALUES);
 	MRd32(mem_addr, data_read, 4, 4, NO_PRINT_VALUES); 
 	printf("\n SRAM first 4 bytes: byte0: 0x%2.2x byte1: 0x%2.2x byte2: 0x%2.2x byte3: 0x%2.2x\n",data_read[0]&0xff,data_read[1]&0xff, data_read[2]&0xff,data_read[3]&0xff); 
- 
+	/*data_write[0]=0x05;
+	data_write[1]=0x06;
+	data_write[2]=0x07;
+	data_write[3]=0x08;
+	MWr32(mem_addr + 4, data_write, 4, 4, NO_PRINT_VALUES);
+	MRd32(mem_addr, data_read, 8, 4, NO_PRINT_VALUES); 
+	printf("\n SRAM first 8 bytes: byte0: 0x%2.2x byte1: 0x%2.2x byte2: 0x%2.2x byte3: 0x%2.2x\n",data_read[0]&0xff,data_read[1]&0xff, data_read[2]&0xff,data_read[3]&0xff); 
+	printf("\n byte4: 0x%2.2x byte5: 0x%2.2x byte6: 0x%2.2x byte7: 0x%2.2x\n",data_read[4]&0xff,data_read[5]&0xff, data_read[6]&0xff,data_read[7]&0xff); 
+ */
 	IORd(pcie_bar_io[0] + 0x20, data_read, 1, 1, NO_PRINT_VALUES);
 	printf("\n Authentication status: %s \n",AUTHENTICA(data_read[0]&0x01)); 
 
@@ -2327,8 +2344,8 @@ int main(int argc, char **argv)
 		printf("Cmd_33: Advanced Program CCTALK nByte \n");
 		printf("Cmd_34: Progam_Check_Sum Sect 1022\n");
 		printf("Cmd_39: Write SR protection disable ALL (FPGA FLASH) \n");
-		printf("=============== AES TEST CMD ==================\n");
-		printf("Cmd_40: Encrypt AES Keys with 17th key and write in Conf ROM sector 3 0x003000\n");	
+		printf("=============== AES TEST CMD ==================\n");    
+		printf("Cmd_40: Program AES encrypted Keys into internal keys memory (4096 bits)\n");	
 		printf("Cmd_41: Verify Key0..15 with open SSL\n");	
 		printf("Cmd_42: Encrypt AES Keys with 17th key and write in FPGA FLASH sector 1023 0x3FF000\n");	
 		printf("Cmd_43: Test_Analyzer\n");	
@@ -3504,78 +3521,83 @@ int main(int argc, char **argv)
 				case 40:
 					{
 						printf("-- ========================================\n");
-						printf("--      Program AES Keys in Conf ROM       \n");		
-						printf("--          Sector 3 0x003000              \n");		
+						printf("--      Program AES encrypted Keys into    \n");		
+						printf("--      internal keys memory (4096 bits)   \n");		
 						printf("-- ========================================\n");
 						
-						data_write[0]=0x01;
-						IOWr(pcie_bar_secs[1] + 0x2B, data_write, 1, 1, 0, NO_PRINT_VALUES);
-						IORd(pcie_bar_secs[1] + 0x2B, data_read, 1,1, NO_PRINT_VALUES);
-						printf("\n AES mode register: %2.2x",data_read[0]); 
+						uint32_t i;
+						uint32_t x;
+						uint8_t *writeBuffer;
+						int32_t key_file;
+						uint32_t size;
+						sizeSecsBuffer = 4096;
+						uint8_t *key_encr  	= (uint8_t *)calloc (sizeSecsBuffer,sizeof(uint8_t));
 						
-						sprintf (path, "sudo ./../git/libsecuress/bin/x64/test-libsecs -enc -k 0 -i ./../git/libsecuress/bin/x64/original_key -o ./../git/libsecuress/bin/x64/key_enc > /dev/null");
-						sprintf (path, "sudo ./../git/libsecuress/bin/x64/test-libsecs -enc -k 0 -i ./../git/libsecuress/bin/x64/original_key -o ./../git/libsecuress/bin/x64/key_enc -ow> /dev/null");
-						system_return = system(path);
-						if (system_return != 0)
-						{
-							printf("system error path %s",path);	
-						}
+						char key_enc_file_name[]="../git/libsecuress/bin/x64/keyEncrypt.bin";
+						writeBuffer = (uint8_t*)calloc(sizeSecsBuffer, sizeof(uint8_t));
 						
+						if (key_enc_file_name) {
+								key_file = open(key_enc_file_name, O_RDONLY);						
+										
+								if (key_file >= 0) 
+									{					
+										size = read(key_file, key_encr, sizeSecsBuffer);
+										if (size == 0)
+										{
+											printf("FAILURE: file  %s. is empty\n", key_enc_file_name);								
+										};
+										close(key_file);
+										
+										//printf("\nPROGRAM DONE\n");									
+										exit=0;	
+									}								
+								else 
+									{			
+										printf("FAILURE: error opening %s. Abort\n", key_enc_file_name);								
+										exit=-1;
+									}
+							}
+							else {
+								printf("FAILURE: invalid original key file name. Abort\n");								
+								exit=-1;
+							}
+							
+						#if _DEBUG	
+							{	
+								for (int j = 0; j<16; j++)
+									{
+									printf("\nla chiave %d è: ",j);	
+									for (int i = (32*j); i<(32*(j+1)); i++)
+										{
+												printf("%2.2x",key_encr[i]);	
+										}
+									}
+							}; 
+						#endif 
+						IORd(pcie_bar_secs[1] + 0x3E, data_read, 1, 1, NO_PRINT_VALUES);//NO_PRINT_VALUES);
+						//printf("\n User Mode    \t= %s", USER(data_read[0]&0x01));
+						printf("\n BIOS_Key written    \t= %s", BIOS((data_read[0]>>1)&0x01));
+						//printf("\n LP master key ready \t= %s", M_KEY_RDY((data_read[0]>>2)&0x01));
+						//printf("\n expanded 17th key \t= %s", EXP17THKEY((data_read[0]>>3)&0x01));
+						printf("Assigning random values to a %u bytes local buffer...\n", sizeSecsBuffer);
+						for (x = 0; x < sizeSecsBuffer; x++)
+												*(writeBuffer + x) = (uint8_t)(0xFF);
+						for (x = 0; x < sizeSecsBuffer/8; x++)
+							*(writeBuffer + x) = *(key_encr+x);//(uint8_t)(rand() & 0x000000FF);
+
+						for(i = 0; i < 512; i++)
+						{	
+							MWr32(mem_addr_secs + i, &writeBuffer[i], 1, 1, 1);//NO_PRINT_VALUES); 
+							printf("\n address: %d",i); 
 						
-						data_write[0]=0x00;
-						IOWr(pcie_bar_secs[1] + 0x2B, data_write, 1, 1, 0, NO_PRINT_VALUES);
-						IORd(pcie_bar_secs[1] + 0x2B, data_read, 1,1, NO_PRINT_VALUES);
-						printf("\n AES mode register: %2.2x",data_read[0]); 
+						}			
 						
-						for(i = 0; i < 8; i++)
-						{
-							printf("\n == AES KEY%d ==",i); 
-							MRd32(mem_addr_secs, data_buffer, 256, 4, NO_PRINT_VALUES); 
-							printf("\n Key 255..128:\t 0x%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+0]&0xff,data_buffer[(i*32)+1]&0xff,data_buffer[(i*32)+2]&0xff,data_buffer[(i*32)+3]&0xff); 
-							printf(".%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+4]&0xff,data_buffer[(i*32)+5]&0xff,data_buffer[(i*32)+6]&0xff,data_buffer[(i*32)+7]&0xff); 
-							printf(".%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+8]&0xff,data_buffer[(i*32)+9]&0xff,data_buffer[(i*32)+10]&0xff,data_buffer[(i*32)+11]&0xff); 
-							printf(".%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+12]&0xff,data_buffer[(i*32)+13]&0xff,data_buffer[(i*32)+14]&0xff,data_buffer[(i*32)+15]&0xff); 
-							printf("\n Key 127..0:\t 0x%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+16]&0xff,data_buffer[(i*32)+17]&0xff,data_buffer[(i*32)+18]&0xff,data_buffer[(i*32)+19]&0xff); 
-							printf(".%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+20]&0xff,data_buffer[(i*32)+21]&0xff,data_buffer[(i*32)+22]&0xff,data_buffer[(i*32)+23]&0xff); 
-							printf(".%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+24]&0xff,data_buffer[(i*32)+25]&0xff,data_buffer[(i*32)+26]&0xff,data_buffer[(i*32)+27]&0xff); 
-							printf(".%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+28]&0xff,data_buffer[(i*32)+29]&0xff,data_buffer[(i*32)+30]&0xff,data_buffer[(i*32)+31]&0xff); 
-						}
-						
-						// ** Program first 256 bytes fourth sector 0x003000
-						start_addr[0]= 0x00;
-						start_addr[1]= 0x30;
-						start_addr[2]= 0x00;
-						// ** Erase fourth sector 0x003000
-						sector_erase(start_addr,CFG_ROM_BASE,CS_CFG_ROM_ENA,NO_PRINT_VALUES);
-						byte_lenght = 256;
-						
-						start_addr[0]= 0x00;
-						start_addr[1]= 0x30;
-						start_addr[2]= 0x00;
-						byte_lenght = 256;
-						
-						page_program(start_addr,data_buffer,byte_lenght,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
-						
-						for(i = 0; i < 8; i++)
-						{
-							printf("\n == AES KEY%d ==",i+8); 
-							MRd32(mem_addr_secs+256, data_buffer, 256, 4, NO_PRINT_VALUES); 
-							printf("\n Key 255..128:\t 0x%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+0]&0xff,data_buffer[(i*32)+1]&0xff,data_buffer[(i*32)+2]&0xff,data_buffer[(i*32)+3]&0xff); 
-							printf(".%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+4]&0xff,data_buffer[(i*32)+5]&0xff,data_buffer[(i*32)+6]&0xff,data_buffer[(i*32)+7]&0xff); 
-							printf(".%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+8]&0xff,data_buffer[(i*32)+9]&0xff,data_buffer[(i*32)+10]&0xff,data_buffer[(i*32)+11]&0xff); 
-							printf(".%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+12]&0xff,data_buffer[(i*32)+13]&0xff,data_buffer[(i*32)+14]&0xff,data_buffer[(i*32)+15]&0xff); 
-							printf("\n Key 127..0:\t 0x%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+16]&0xff,data_buffer[(i*32)+17]&0xff,data_buffer[(i*32)+18]&0xff,data_buffer[(i*32)+19]&0xff); 
-							printf(".%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+20]&0xff,data_buffer[(i*32)+21]&0xff,data_buffer[(i*32)+22]&0xff,data_buffer[(i*32)+23]&0xff); 
-							printf(".%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+24]&0xff,data_buffer[(i*32)+25]&0xff,data_buffer[(i*32)+26]&0xff,data_buffer[(i*32)+27]&0xff); 
-							printf(".%2.2x%2.2x%2.2x%2.2x",data_buffer[(i*32)+28]&0xff,data_buffer[(i*32)+29]&0xff,data_buffer[(i*32)+30]&0xff,data_buffer[(i*32)+31]&0xff); 
-						}
-						
-						start_addr[0]= 0x00;
-						start_addr[1]= 0x31;
-						start_addr[2]= 0x00;
-						byte_lenght = 256;
-						
-						page_program(start_addr,data_buffer,byte_lenght,CFG_ROM_BASE,CS_CFG_ROM_ENA,PRINT_VALUES);
+						//MWr32(mem_addr_secs, writeBuffer, 512, 1, 0);//NO_PRINT_VALUES); 
+						IORd(pcie_bar_secs[1] + 0x3E, data_read, 1, 1, 1);//NO_PRINT_VALUES);//NO_PRINT_VALUES);
+						//printf("\n User Mode    \t= %s", USER(data_read[0]&0x01));
+						printf("\n BIOS_Key written    \t= %s", BIOS((data_read[0]>>1)&0x01));
+						//printf("\n LP master key ready \t= %s", M_KEY_RDY((data_read[0]>>2)&0x01));
+						//printf("\n expanded 17th key \t= %s", EXP17THKEY((data_read[0]>>3)&0x01));
 						
 						wait_to_continue();
 						break;
