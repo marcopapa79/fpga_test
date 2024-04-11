@@ -1,0 +1,70 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+   <title>Network Preferences</title>
+   <meta name="generator" content="Help &amp; Manual" />
+   <meta name="keywords" content="Network preferences" />
+   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+   
+   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+   <meta name="description" content="Network addresses Up to 6 network addresses can be entered for the simultaneous testing of the connection to 6 different locations. &nbsp;These connections can pass via different..." />
+   <meta name="picture" content="" />
+   <link type="text/css" href="default.css" rel="stylesheet" />
+   <style type="text/css">
+     body { margin: 0px; background: #FFFFFF; }
+   </style>
+   <script type="text/javascript" src="jquery.js"></script>
+   <script type="text/javascript" src="helpman_settings.js"></script>
+   <script type="text/javascript" src="helpman_topicinit.js"></script>
+
+   <script type="text/javascript">
+     HMSyncTOC("index.html", "network_preferences.htm");
+   </script>
+   <script type="text/javascript" src="highlight.js"></script>
+   <script type="text/javascript">
+     $(document).ready(function(){highlight();});
+   </script>
+</head>
+<body>
+
+
+<table style="width:100%; border:none; border-spacing:0px; padding:5px; background:#649CCC">
+  <tr style="vertical-align:middle">
+    <td style="text-align:left">
+      <h1 class="p_Heading1"><span class="f_Heading1">Network Preferences</span></h1>
+
+    </td>
+    <td style="text-align:right">
+     <a href="overview.htm">Top</a>&nbsp;
+     <a href="memory_preferences.htm">Previous</a>&nbsp;
+     <a href="cd-rom_dvd_preferences.htm">Next</a>
+    </td>
+  </tr>
+</table>
+
+
+<!-- Placeholder for topic body. -->
+<table style="width:100%;border:none;border-spacing:0px"><tr style="vertical-align:top"><td style="text-align:left;padding:5px">
+<p class="p_Normal"><span style="font-style: italic; text-decoration: underline;">Network addresses</span></p>
+<p class="p_Normal">Up to 6 network addresses can be entered for the simultaneous testing of the connection to 6 different locations. &nbsp;These connections can pass via different network interface cards (NIC) or the same one. Unless the &quot;Test All&quot; options is selected the NIC used will depend on the TCP/IP configuration set-up of your system. Each address must be a URL or an IP address and should be located on a different machine on the network. If an IP from the </p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal">A URL is the name of a network host, eg. www.hostname.com</p>
+<p class="p_Normal">An IP address is a sequence of 4 numbers that correspond to a network host. eg. 169.192.0.1</p>
+<p class="p_Normal">If less than 6 addresses need to be tested uncheck the active check box.</p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal">The host selected must be accessible from the computer and capable of responding to the ‘ping’ command. See the <a href="network_test.htm" class="topiclink">Network Test</a> description for more details. PassMark recommends the selection of a local host to minimize data link problems, which are fairly common on the Internet.</p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-style: italic; text-decoration: underline;">Test all available NICs</span></p>
+<p class="p_Normal">This option will bind each entered address to a different available network card so the traffic will be correctly routed through each network card. If &nbsp;more network addresses are specified than there are network cards available an error will be displayed. If this option is not selected BurnInTest will not force the routing of test traffic and data routing will depend on the operating system routing table.</p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-style: italic; text-decoration: underline;">Timeout</span></p>
+<p class="p_Normal">This value determines how long BurnInTest will wait for a data packet to be sent or received before an error is reported. The value is measured in Milliseconds. 2000ms (2 seconds) is the default value.</p>
+<p class="p_Normal">&nbsp;</p>
+<p class="p_Normal"><span style="font-style: italic; text-decoration: underline;">Error handling</span></p>
+<p class="p_Normal">There are two options for handling errors that occur during the execution of the network test. BurnInTest can either log an error for every bad (or missing) packet or can be set to only log an error when the number of errors exceed a threshold set by the user. This threshold is expressed as the percentage of bad packets compared to the overall number of packets sent, the first error will be flagged only after a certain number of packets have been sent.</p>
+<p class="p_Normal">&nbsp;</p>
+
+</td></tr></table>
+
+</body>
+</html>

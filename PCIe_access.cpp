@@ -60,6 +60,7 @@
 
 
 #include <stdio.h>
+#include "PCIe_access.h"
 
 
 	// *******************************
@@ -338,6 +339,13 @@
 				uint64_t * qword_dst 	= (uint64_t *)mem_addr;
 				uint64_t * qword_src 	= (uint64_t *)write_buffer;
 				
+				uint128_t *oword_dst 	= (uint128_t *)mem_addr;
+				uint128_t *oword_src 	= (uint128_t *)write_buffer;
+				uint256_t *hword_dst 	= (uint256_t *)mem_addr;
+				uint256_t *hword_src 	= (uint256_t *)write_buffer;
+				//uint8_t octword_src[16] = {0};
+				//uint8_t oword_src[16] = write_buffer;
+				
 				switch(byte_alligned) 
 					{	
 						case 1: // 1 byte
@@ -425,7 +433,42 @@
 										printf("\n");
 									}; 
 							#endif 
-						break;
+						break;						
+						
+						case 16:	// 16 bytes - 1QWord				
+							for (unsigned int n=0; n<(length/16); n++) 
+								{
+									*(oword_dst+n) = *(oword_src+n);
+								}
+							#if _DEBUG	
+									{		
+										for (unsigned int j=0;j<length;j++) printf("%2.2x ",write_buffer[j]);
+										printf("\n");
+										for (unsigned int j=0;j<(length/16);j++) printf("%16.16lx %16.16lx ",(oword_src+j)->hi, (oword_src+j)->lo);
+										printf("\n");						
+										for (unsigned int j=0;j<(length/16);j++) printf("%16.16lx %16.16lx ",(oword_dst+j)->hi, (oword_dst+j)->lo);
+										printf("\n");
+									}; 
+							#endif 
+						break;				
+						
+/* 						case 32:	// 8 bytes - 1QWord				
+							for (unsigned int n=0; n<(length/32); n++) 
+								{
+									*(hword_dst+n) = *(hword_src+n);
+								}
+							#if _DEBUG	
+									{		
+										for (unsigned int j=0;j<length;j++) printf("%2.2x ",write_buffer[j]);
+										printf("\n");
+										for (unsigned int j=0;j<(length/32);j++) printf("%16.16lx %16.16lx %16.16lx %16.16lx",(hword_src+j)->hi, (hword_src+j)->hi_m, (hword_src+j)->lo_m, (hword_src+j)->lo);
+										printf("\n");						
+										for (unsigned int j=0;j<(length/32);j++) printf("%16.16lx %16.16lx %16.16lx %16.16lx",(hword_dst+j)->hi, (hword_dst+j)->hi_m, (hword_dst+j)->lo_m, (hword_dst+j)->lo);
+										printf("\n");
+									}; 
+							#endif 
+						break; */
+						
 				
 					};
 								

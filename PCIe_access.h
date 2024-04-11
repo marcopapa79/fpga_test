@@ -1,6 +1,18 @@
 //#ifndef _PCIe_ACCESS_H
 //#define _PCIe_ACCESS_H
 
+			#pragma pack(push, 1)
+			typedef struct _uint128_t {
+				uint64_t lo;
+				uint64_t hi;
+			} uint128_t;
+			typedef struct _uint256_t {
+				uint64_t lo;
+				uint64_t lo_m;
+				uint64_t hi_m;
+				uint64_t hi;
+			} uint256_t;
+			#pragma pack(pop)
 	// ** Function Declaration **
 	//		
 	
