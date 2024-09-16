@@ -423,16 +423,21 @@
 								{
 									*(qword_dst+n) = *(qword_src+n);
 								}
-							#if _DEBUG	
-									{		
-										for (unsigned int j=0;j<length;j++) printf("%2.2x ",write_buffer[j]);
-										printf("\n");
-										for (unsigned int j=0;j<(length/8);j++) printf("%16.16lx ",*(qword_src+j));
-										printf("\n");						
-										for (unsigned int j=0;j<(length/8);j++) printf("%16.16lx ",*(qword_dst+j));
-										printf("\n");
-									}; 
-							#endif 
+							
+								switch(debug_print) 
+									{	
+										case 0: // no print
+										break;
+										case 1: // print written data	
+											for (unsigned int j=0;j<length;j++) printf("byte %d: %2.2x \n",j, write_buffer[j]);
+											for (unsigned int j=0;j<(length/8);j++) printf("qword written: %16.16lx \n",*(qword_src+j));						
+										break;
+										case 2: // print written data and read data	
+											for (unsigned int j=0;j<length;j++) printf("byte %d: %2.2x \n",j, write_buffer[j]);
+											for (unsigned int j=0;j<(length/8);j++) printf("qword written: %16.16lx \n",*(qword_src+j));	
+											for (unsigned int j=0;j<(length/8);j++) printf("readback qword: %16.16lx \n",*(qword_dst+j));
+										break;
+									};
 						break;						
 						
 						case 16:	// 16 bytes - 1QWord				
@@ -440,14 +445,24 @@
 								{
 									*(oword_dst+n) = *(oword_src+n);
 								}
+							
+								switch(debug_print) 
+									{	
+										case 0: // no print
+										break;
+										case 1: // print written data	
+											for (unsigned int j=0;j<length;j++) printf("byte %d: %2.2x \n",j, write_buffer[j]);
+											for (unsigned int j=0;j<(length/16);j++) printf("octal written: %16.16lx %16.16lx \n",(oword_src+j)->hi, (oword_src+j)->lo);					
+										break;
+										case 2: // print written data and read data	
+											for (unsigned int j=0;j<length;j++) printf("byte %d: %2.2x \n",j, write_buffer[j]);
+											for (unsigned int j=0;j<(length/16);j++) printf("octal written: %16.16lx %16.16lx \n",(oword_src+j)->hi, (oword_src+j)->lo);
+											for (unsigned int j=0;j<(length/16);j++) printf("readback octalword: %16.16lx %16.16lx \n",(oword_dst+j)->hi, (oword_dst+j)->lo);
+										break;
+									};
 							#if _DEBUG	
 									{		
-										for (unsigned int j=0;j<length;j++) printf("%2.2x ",write_buffer[j]);
-										printf("\n");
-										for (unsigned int j=0;j<(length/16);j++) printf("%16.16lx %16.16lx ",(oword_src+j)->hi, (oword_src+j)->lo);
-										printf("\n");						
-										for (unsigned int j=0;j<(length/16);j++) printf("%16.16lx %16.16lx ",(oword_dst+j)->hi, (oword_dst+j)->lo);
-										printf("\n");
+										
 									}; 
 							#endif 
 						break;				
@@ -532,7 +547,7 @@
 					
 				}
 			}
-			/*
+			/** /
 			else 
 				{
 					if (debug_print != 0)
@@ -540,7 +555,7 @@
 						printf(" ** Don't find any PCIe configuration space function : %s **\n",devid);
 					}
 				}
-				*/
+				/ **/
 		}
 		fclose(f);
 		if (debug_print != 0)

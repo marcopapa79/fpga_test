@@ -67,10 +67,6 @@
 #endif
 
 #include <stdio.h>
-#include <iostream>
-#include <chrono>
-#include <vector>
-using namespace std::chrono;
 /*=============================
 ====== PCIe definition ======*/
 #include "PCIe_access.h"
@@ -183,6 +179,7 @@ using namespace std::chrono;
 // Utility details
 //      Version
 //       Date
+
 uint8_t ver_major = 1;
 uint8_t ver_minor = 15;
 char date[]="16/09/2024";
@@ -1453,19 +1450,6 @@ int main(int argc, char **argv)
 	======================================== 
 	========================================
 	*/	
-	long long elapsedTime = 0; // Time elapsed in each attept
-	long long totalElapsedTime = 0; // Total time elapsed
-	high_resolution_clock::time_point start, stop; // start and stop time
-	// ==== init array for timing count ====
-	const size_t array_size = 100000000; // 100 million elements
-    std::vector<int> array(array_size, 0);
-
-    // Fill the array with some values
-    for (size_t i = 0; i < array_size; ++i) {
-        array[i] = i;
-    }
-	// ==================================
-	
 	uint32_t system_return;
 	char path [1024]="sudo ./../git/libsecuress/bin/x64/test-libsecs -enc -k 0   -i ./../git/libsecuress/bin/x64/original_key    -o ./../git/libsecuress/bin/x64/key_enc  > /dev/null";
 	
@@ -3288,13 +3272,27 @@ int main(int argc, char **argv)
 						IORd(pcie_bar_mem[1] + 0x14, data_read, 2, 1, NO_PRINT_VALUES); 
 						printf("\n ===================================");
 						printf("\n === SRAM MODULE (HW parameters) ===");
-						printf("\n =====      Version %2.2x.%2.2x      =====\n",data_read[0]&0xff,data_read[1]&0xff); 
+						printf("\n =====      Version %2.2x.%2.2x      =====",data_read[0]&0xff,data_read[1]&0xff); 
 						#if _DEBUG	
 						{	
 							printf("\n\n === MODE REGISTER READ ===");
 							IORd(pcie_bar_mem[1] + 0x0C, data_read, 1, 1, 1);
 						}; 
 						#endif 
+/* 						data_write[0]=0x0F;
+						IOWr(pcie_bar_mem[1] + 0x0D, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						#if _DEBUG	
+						{	
+							printf("\n\n === MODE REGISTER READ ===");
+							IORd(pcie_bar_mem[1] + 0x0C, data_read, 1, 1, 1);//NO_PRINT_VALUES);
+						}; 						
+						#endif  */
+				
+/* 						// check Autentication Status			
+						IORd(pcie_bar_io[0] + 0x20, data_read, 1, 1, NO_PRINT_VALUES);
+						printf("\n Authentication status: %s \n",AUTHENTICA(data_read[0]&0x01));  */
+						
+						
 						// enable all bank
 						data_write[0]=0x0F;
 						IOWr(pcie_bar_mem[1] + 0x0D, data_write, 1, 1, 0, NO_PRINT_VALUES);
@@ -3305,7 +3303,6 @@ int main(int argc, char **argv)
 						uint8_t *writeBuffer;
 						uint8_t *readBuffer;
 						uint32_t sram_mode_num;
-						uint32_t start_address;
 						
 						uint32_t x;
 						uint32_t i;
@@ -3366,13 +3363,6 @@ int main(int argc, char **argv)
 									
 									// max write byte size is Memory max size
 									if (test_size > bufferSize) test_size=bufferSize;
-									
-									printf("\n\n Which address do you want to write to ? [0..%d]: ",bufferSize);
-									if ((ret_code=scanf("%d", &start_address))!=1)
-									{
-										printf("function read error %d\n",ret_code);
-									};
-									
 									
 									printf("-- =====================\n");
 									printf("--     Data Type        \n");		
@@ -3436,30 +3426,13 @@ int main(int argc, char **argv)
 									}; 
 									#endif 
 									
-									// Measure the time taken to access an element
-									// Start time
-									start = std::chrono::high_resolution_clock::now();
-									//while (1)
-									//{
-										i = 0;
-										while (i < test_size)//*1000)
-											{
-												MWr32(mem_addr+i+start_address, &writeBuffer[i], sram_waccess_type, sram_waccess_type, NO_PRINT_VALUES); 
-												i += sram_waccess_type;		
-											}
-									//}
-									volatile int value = array[array_size / 2]; // Access the middle element
-									// Stop time
-									stop = std::chrono::high_resolution_clock::now();
-
-								    // Time calculation
-									elapsedTime = std::chrono::duration_cast<std::chrono::nanoseconds>(stop - start).count();
-									// Total Time calculation
-									//totalElapsedTime = totalElapsedTime + elapsedTime;
-									printf("Time taken for DRAM access = %lld nanoseconds\n", elapsedTime);
-									printf("Troughput = %d B/s\n", test_size/elapsedTime);
-									double throughput = ((double)test_size/(double)elapsedTime)*1000; 
-									printf("Troughput = %f MB/s\n", throughput);
+									i = 0;
+									while (i < test_size)
+										{
+											MWr32(mem_addr+i, &writeBuffer[i], sram_waccess_type, sram_waccess_type, 1); 
+											i += sram_waccess_type;		
+										}
+									
 									
 								free(writeBuffer);
 								break;
@@ -3501,12 +3474,6 @@ int main(int argc, char **argv)
 									// max write byte size is Memory max size
 									if (test_size > bufferSize) test_size=bufferSize;
 									
-									printf("\n\n Which address do you want to read from ? [0..%d]: ",bufferSize);
-									if ((ret_code=scanf("%d", &start_address))!=1)
-									{
-										printf("function read error %d\n",ret_code);
-									};
-									
 									#if 1//_DEBUG	
 									{	
 										printf("\n\n === read access size %d ===",sram_raccess_type);
@@ -3519,7 +3486,7 @@ int main(int argc, char **argv)
 									i = 0;
 									while (i < test_size)
 										{
-											MRd32(mem_addr+i+start_address, &readBuffer[i], sram_raccess_type, sram_raccess_type, 1);//NO_PRINT_VALUES);
+											MRd32(mem_addr+i, &readBuffer[i], sram_raccess_type, sram_raccess_type, 1);//NO_PRINT_VALUES);
 									
 											/*for(j = i; j < (i+sram_access_type); j++)
 											{
