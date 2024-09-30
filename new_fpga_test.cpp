@@ -3379,7 +3379,8 @@ int main(int argc, char **argv)
 									printf("--  (1) 0xFF            \n");
 									printf("--  (2) 0x00            \n");
 									printf("--  (3) Consecutive     \n");
-									printf("--  (4) Random          \n");
+									printf("--  (4) Dword_type     \n");
+									printf("--  (5) Random          \n");
 									printf("-- =====================\n");
 						
 									printf("\n\n Data Type ? [1..4]: ");
@@ -3412,6 +3413,16 @@ int main(int argc, char **argv)
 												break;
 											}  
 										case 4:
+											{	
+												printf("Assigning random values to a %u bytes local buffer...\n", test_size);
+												for (x = 0; x < test_size/4; x++)
+												*(writeBuffer + x*4) = (uint8_t)(x) & 0x000000FF);  
+												*(writeBuffer + x*4+1) = (uint8_t)(x) & 0x000000FF);
+												*(writeBuffer + x*4+2) = (uint8_t)(x) & 0x000000FF);
+												*(writeBuffer + x*4+3) = (uint8_t)(x) & 0x000000FF);
+												break;
+											}  
+										case 5:
 											{	
 												printf("Assigning random values to a %u bytes local buffer...\n", test_size);
 												for (x = 0; x < test_size; x++)
