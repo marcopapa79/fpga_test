@@ -1,3 +1,4 @@
+
 /*
 * =====================================================================================
 *
@@ -3317,7 +3318,7 @@ int main(int argc, char **argv)
 						printf("--       SRAM command               \n");		
 						printf("--  (1) Write Access                \n");
 						printf("--  (2) Read Access                 \n");
-						printf("--  (3) Change SRAM Mode Access     \n");
+						printf("--  (3) Test Write Read Access      \n");
 						printf("--  (4) Exit                        \n");
 						printf("-- =================================\n");
 						
@@ -3383,7 +3384,7 @@ int main(int argc, char **argv)
 									printf("--  (5) Random          \n");
 									printf("-- =====================\n");
 						
-									printf("\n\n Data Type ? [1..4]: ");
+									printf("\n\n Data Type ? [1..5]: ");
 									if ((ret_code=scanf("%d", &data_type))!=1)
 									{
 										printf("function read error %d\n",ret_code);
@@ -3416,10 +3417,12 @@ int main(int argc, char **argv)
 											{	
 												printf("Assigning random values to a %u bytes local buffer...\n", test_size);
 												for (x = 0; x < test_size/4; x++)
-												*(writeBuffer + x*4) = (uint8_t)(x) & 0x000000FF);  
-												*(writeBuffer + x*4+1) = (uint8_t)(x) & 0x000000FF);
-												*(writeBuffer + x*4+2) = (uint8_t)(x) & 0x000000FF);
-												*(writeBuffer + x*4+3) = (uint8_t)(x) & 0x000000FF);
+													{
+														*(writeBuffer + x*4) = (uint8_t)(x+0xD0);// & 0x000000FF);  
+														*(writeBuffer + x*4+1) = (uint8_t)(x+0xD0);// &  0x000000FF);  
+														*(writeBuffer + x*4+2) = (uint8_t)(x+0xD0);// & 0x000000FF);  
+														*(writeBuffer + x*4+3) = (uint8_t)(x+0xD0);// & 0x000000FF);	
+													}
 												break;
 											}  
 										case 5:
@@ -3545,53 +3548,59 @@ int main(int argc, char **argv)
 								} 
 							case 3:
 								{	
-									printf("-- =================================\n");
-									printf("--       SRAM MODE                  \n");		
-									printf("--  (1) NORMAL_MODEx64              \n");
-									printf("--  (2) NORMAL_MODE                 \n");
-									printf("--  (3) MIRROR_MODEx32              \n");
-									printf("--  (4) MIRROR_MODE                 \n");
-									printf("-- =================================\n");
-						
-									printf("\n\n Insert SRAM mode acces [1..4]: ");
-									if ((ret_code=scanf("%d", &sram_mode_num))!=1)
+								
+									printf("\n\n How many byte to write ? [0..%d]: ",bufferSize);
+									if ((ret_code=scanf("%d", &test_size))!=1)
 									{
 										printf("function read error %d\n",ret_code);
 									};
 									
-									data_write[0]=NORMAL_MODEx64;
-									data_write[1]=NORMAL_MODE;
-									data_write[2]=MIRROR_MODEx32;
-									data_write[3]=MIRROR_MODE;
-									// write sram mode
-									IOWr(pcie_bar_mem[1] + 0x0C, data_write, 1, 1, (sram_mode_num-1), NO_PRINT_VALUES);
-								
-									switch(sram_mode_num)
+									// max write byte size is Memory max size
+									if (test_size > bufferSize) test_size=bufferSize;
+									
+									printf("\n\n Which address do you want to write to ? [0..%d]: ",bufferSize);
+									if ((ret_code=scanf("%d", &start_address))!=1)
+									{
+										printf("function read error %d\n",ret_code);
+									};
+									
+									printf("-- =================================\n");
+									printf("--       SRAM MODE                  \n");		
+									printf("--  (1) Consecutive Data            \n");
+									printf("--  (2) Random Data                 \n");
+									printf("--  (3)                             \n");
+									printf("--  (4)                             \n");
+									printf("-- =================================\n");
+						
+									printf("\n\n Data Type ? [1..5]: ");
+									if ((ret_code=scanf("%d", &data_type))!=1)
+									{
+										printf("function read error %d\n",ret_code);
+									};
+									
+									switch(data_type)
 									{
 										case 1:
-											{
-												bufferSize = nvramMaxSize; 	
-												break;
-											}
-										case 2:
-											{
-												bufferSize = (nvramMaxSize/2); 
-												break;
-											}
-										case 3:
-											{
-												bufferSize = (nvramMaxSize/2); 
-												break;
-											}
-										case 4:
 											{	
-												bufferSize = (nvramMaxSize/4);  
+												printf("Assigning consecutive values to a %u bytes local buffer...\n", test_size);
+												for (x = 0; x < test_size; x++)
+												*(writeBuffer + x) = (uint8_t)(x);
 												break;
-											}
+											} 
+										case 2:
+											{	
+												printf("Assigning random values to a %u bytes local buffer...\n", test_size);
+												for (x = 0; x < test_size; x++)
+												*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
+												break;
+											}  
 										default:
-										{	
-											break;
-										}  
+											{	
+												printf("Assigning random values to a %u bytes local buffer...\n", test_size);
+												for (x = 0; x < test_size; x++)
+												*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
+												break;
+											}  
 									} 
 								break;
 								}
