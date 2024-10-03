@@ -3548,7 +3548,10 @@ int main(int argc, char **argv)
 								} 
 							case 3:
 								{	
-								
+									bufferSize = nvramMaxSize; 
+									readBuffer = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
+									writeBuffer = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
+									
 									printf("\n\n How many byte to write ? [0..%d]: ",bufferSize);
 									if ((ret_code=scanf("%d", &test_size))!=1)
 									{
@@ -3563,6 +3566,9 @@ int main(int argc, char **argv)
 									{
 										printf("function read error %d\n",ret_code);
 									};
+									
+									
+									
 									
 									printf("-- =================================\n");
 									printf("--       SRAM MODE                  \n");		
@@ -3602,6 +3608,135 @@ int main(int argc, char **argv)
 												break;
 											}  
 									} 
+								
+						uint8_t *writeBuffer00;	
+						writeBuffer00 = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
+						
+						uint32_t rpt=0;
+						//while (rpt < 12)
+						while (rpt < 9)
+						{			
+									switch(rpt)
+									{
+										case 0:
+											{	
+												sram_waccess_type = 2;  // Word
+												sram_raccess_type = 2;  // Word
+												break;
+											} 
+										case 1:
+											{	
+												sram_waccess_type = 2;  // Word
+												sram_raccess_type = 4;  // Dword
+												break;
+											} 
+										case 2:
+											{	
+												sram_waccess_type = 4;  // Dword
+												sram_raccess_type = 2;  // Word
+												break;
+											}  
+										case 3:
+											{	
+												sram_waccess_type = 4;  // Dword
+												sram_raccess_type = 4;  // Dword
+												break;
+											}  
+										case 4:
+											{	
+												sram_waccess_type = 8;  // Qword
+												sram_raccess_type = 2;  // Word
+												break;
+											} 
+										case 5:
+											{	
+												sram_waccess_type = 8;  // Qword
+												sram_raccess_type = 4;  // Dword
+												break;
+											} 
+										case 6:
+											{	
+												sram_waccess_type = 2;  // Word
+												sram_raccess_type = 8;  // Qword
+												break;
+											}  
+										case 7:
+											{	
+												sram_waccess_type = 4;  // Dword
+												sram_raccess_type = 8;  // Qword
+												break;
+											}  
+										case 8:
+											{	
+												sram_waccess_type = 8;  // Qword
+												sram_raccess_type = 8;  // Qword
+												break;
+											}  
+										case 9:
+											{	
+												sram_waccess_type = 16;  // Oword
+												sram_raccess_type = 2;   // Word
+												break;
+											} 
+										case 10:
+											{	
+												sram_waccess_type = 16;  // Oword
+												sram_raccess_type = 4;   // Dword
+												break;
+											} 
+										case 11:
+											{	
+												sram_waccess_type = 16;  // Oword
+												sram_raccess_type = 8;   // Qword
+												break;
+											} 
+										default:
+											{	
+												sram_waccess_type = 4;  // Dword
+												sram_raccess_type = 4;  // Dword
+												break;
+											}  
+									} 
+									// erase mem
+									i = 0;
+									//printf("write buffer...\n");	
+									while (i < test_size)
+										{
+											MWr32(mem_addr+i+start_address, &writeBuffer00[i], 4, 4, NO_PRINT_VALUES); 
+											i += 4;		
+										}
+										
+									printf("Write @ %d bytes access type and read @ %d bytes access type...\n", sram_waccess_type,sram_raccess_type);
+									i = 0;
+									printf("write buffer...\n");												
+									while (i < test_size)//*1000)
+										{
+											MWr32(mem_addr+i+start_address, &writeBuffer[i], sram_waccess_type, sram_waccess_type, NO_PRINT_VALUES); 
+											i += sram_waccess_type;		
+										}
+											
+									i = 0;
+									printf("read buffer...\n");
+									while (i < test_size)
+										{
+											MRd32(mem_addr+i+start_address, &readBuffer[i], sram_raccess_type, sram_raccess_type, NO_PRINT_VALUES);//1);//NO_PRINT_VALUES);
+									
+											/**/for(j = i; j < (i+sram_raccess_type); j++)
+											{
+												if ((writeBuffer[j]!=readBuffer[j]) && j<256) printf("\n Error at address %d: Expected: 0x%2.2x got: 0x%2.2x\n",j,writeBuffer[j]&0xff,readBuffer[j]&0xff); 
+											}/**/
+											i += sram_raccess_type;		
+		  
+										}
+									
+										
+								
+									rpt++; // check if number of iteration is infinite	
+								
+									usleep(2*1000*1000);
+						}				 
+								free(writeBuffer);
+								free(readBuffer);
 								break;
 								}
 							case 4:
