@@ -3782,6 +3782,7 @@ int main(int argc, char **argv)
 						printf("--  (18) Wel and SR(0x00)     (x8)  \n");
 						printf("--  (19) User mode                  \n");
 						printf("--  (20) init (JESD, WEL, SR->00)   \n");
+						printf("--  (25) Rst,Wel/SR=(0x00),user mode\n");
 						printf("-- =================================\n");
 						
 						
@@ -4092,7 +4093,7 @@ int main(int argc, char **argv)
 								} 
 							case 19:
 								{
-									printf("--   User mode      (x1)  \n");
+									printf("--   User mode           \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
 										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
@@ -4166,6 +4167,52 @@ int main(int argc, char **argv)
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;			
 									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									
+								break;
+								}
+							case 25:
+								{
+									printf("--   Soft reset + Wel and SR=(0x00) + user mode       \n");
+									
+									// check in MANUAL_CMD_DECODE status 
+									do{ 
+										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+									} while (!(readSTATUS[0] & 0x01));
+									writeCTRL[0] =0x00;	
+									writeCTRL[1] =0x02;			
+									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									usleep(10*1000);
+									writeCTRL[0] =0x00;	
+									writeCTRL[1] =0x00;			
+									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									
+									usleep(100*1000);
+									// check in MANUAL_CMD_DECODE status 
+									do{ 
+										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+									} while (!(readSTATUS[0] & 0x01));
+									writeCTRL[0] =0x00;	
+									writeCTRL[1] =0x00;		
+									writeCTRL[2] =0x40;	
+									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									usleep(10*1000);
+									writeCTRL[0] =0x00;	
+									writeCTRL[1] =0x00;	
+									writeCTRL[2] =0x00;			
+									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									
+									// check in MANUAL_CMD_DECODE status 
+									do{ 
+										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+									} while (!(readSTATUS[0] & 0x01));
+									writeCTRL[0] =0x00;	
+									writeCTRL[1] =0x01;			
+									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									usleep(10*1000);
+									writeCTRL[0] =0x00;	
+									writeCTRL[1] =0x00;			
+									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									
 									
 								break;
 								}
