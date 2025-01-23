@@ -2198,10 +2198,10 @@ int main(int argc, char **argv)
 										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01)); */
 									MRd32(mem_addr +0x10000000 + 0x14, nvregister, 4, 4, NO_PRINT_VALUES);
-									printf("\n NVR0 = %2.2x NVR1 = %2.2x NVR2 = %2.2x NVR3 = %2.2x\n\n", nvregister[0]&0xff,nvregister[1]&0xff, nvregister[2]&0xff,nvregister[3]&0xff);
+									printf("\n NVR0 = %2.2x\n NVR1 = %2.2x\n NVR2 = %2.2x\n NVR3 = %2.2x", nvregister[0]&0xff,nvregister[1]&0xff, nvregister[2]&0xff,nvregister[3]&0xff);
 									
 									MRd32(mem_addr +0x10000000 + 0x18, nvregister, 4, 4, NO_PRINT_VALUES);
-									printf("\n NVR4 = %2.2x NVR5 = %2.2x NVR6 = %2.2x NVR7 = %2.2x\n\n", nvregister[0]&0xff,nvregister[1]&0xff, nvregister[2]&0xff,nvregister[3]&0xff);
+									printf("\n NVR4 = %2.2x\n NVR5 = %2.2x\n NVR6 = %2.2x\n NVR7 = %2.2x\n\n", nvregister[0]&0xff,nvregister[1]&0xff, nvregister[2]&0xff,nvregister[3]&0xff);
 									
 								break;
 								} 
