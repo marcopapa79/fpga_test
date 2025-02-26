@@ -75,7 +75,7 @@ using namespace std::chrono;
 ====== PCIe definition ======*/
 #include "PCIe_access.h"
 #define IO_DEVID    "19d40100"
-#define NVRAM_DEVID "19d40200"
+#define NVRAM_DEVID "19d41000"
 #define SECs_DEVID  "19d40300"
 #define MUART_DEVID "19d40a00"
 #define QLI_DEVID   "19d40e00"
@@ -2202,6 +2202,28 @@ int main(int argc, char **argv)
 									
 									MRd32(mem_addr +0x10000000 + 0x18, nvregister, 4, 4, NO_PRINT_VALUES);
 									printf("\n NVR4 = %2.2x\n NVR5 = %2.2x\n NVR6 = %2.2x\n NVR7 = %2.2x\n\n", nvregister[0]&0xff,nvregister[1]&0xff, nvregister[2]&0xff,nvregister[3]&0xff);
+									
+								break;
+								} 
+							
+							case 29:
+								{
+									printf("--   Read ISR       (x8)  \n");
+									// check in MANUAL_CMD_DECODE status 
+									do{ 
+										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+									} while (!(readSTATUS[0] & 0x01));
+									writeCTRL[0] =0x00;	
+									writeCTRL[1] =0x00;		
+									writeCTRL[2] =0x00;			
+									writeCTRL[3] =0x01;
+									MWr32(mem_addr+0x10000003, &writeCTRL[3], 1, 1, NO_PRINT_VALUES); 
+									usleep(10*1000);
+									writeCTRL[0] =0x00;	
+									writeCTRL[1] =0x00;	
+									writeCTRL[2] =0x00;	
+									writeCTRL[3] =0x00;			
+									MWr32(mem_addr+0x10000003, &writeCTRL[3], 1, 1, NO_PRINT_VALUES); 
 									
 								break;
 								} 
