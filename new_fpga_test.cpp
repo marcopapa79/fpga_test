@@ -184,9 +184,9 @@ using namespace std::chrono;
 // Utility details
 //      Version
 //       Date
-uint8_t ver_major = 1;
-uint8_t ver_minor = 15;
-char date[]="26/02/2025";
+uint8_t ver_major = 2;
+uint8_t ver_minor = 0;
+char date[]="08/05/2025";
 
 /*===========================*/
 
@@ -201,6 +201,8 @@ int f_read = 0;                     // FPGA read code command (default: no)
 int f_write = 0;                    // FPGA write code command (default: no)
 int f_save_fout = 0;                // Save the FPGA content in an output file (default: no) 
 int f_help = 0;                		// Help menu (default: no) 
+int f_check = 0;                	// Function Check 
+int f_verbose = 0;					// Verbosity
 
 uint32_t mem_size = 4*1024*1024;
 uint32_t sizeSecsBuffer = 32*16;  
@@ -1288,6 +1290,16 @@ int main(int argc, char **argv)
                 rom_file_name = strdup(argv[n+1]);
             }
         }
+		else if(strncmp(argv[n], "-check", 6)==0) {
+            // Check RAM
+            f_check = 1;
+			f_verbose = 0;
+        }
+		else if(strncmp(argv[n], "-v_check", 8)==0) {
+            // Check RAM
+            f_check = 1;
+			f_verbose = 1;
+        }	
     }
 
 #ifndef _WIN32
@@ -1342,8 +1354,10 @@ int main(int argc, char **argv)
 		uint8_t * mem_addr_sbc;			
 		uint8_t * mem_addr_ats;			
 		uint8_t * mem_addr_test;	
+		uint8_t * mem_ctrl;		
 		
 		mem_addr = (uint8_t*)mmap(0, nvramMaxSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_mem[0]);
+		mem_ctrl = (uint8_t*)mmap(0, 256, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_mem[1]);
 		/*mem_addr_led = (uint8_t*)mmap(0, nvramSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_qli[0]);
 		mem_addr_sbc = (uint8_t*)mmap(0, nvramSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_sbc[0]);
 		*/
@@ -1447,6 +1461,73 @@ int main(int argc, char **argv)
 					exit(-1);
 				}
 			}
+			
+			//
+        // MEM check DQA write and read code
+        //
+        if (f_check) 
+			{
+					if (f_verbose)
+					{	
+						printf("\n\n");
+						MRd32(mem_ctrl + 0x28, data_read, 2, 1, NO_PRINT_VALUES); 
+						printf("\n ====================================");
+						printf("\n === NVRAM MODULE (HW parameters) ===");
+						printf("\n =====      Version %2.2x.%2.2x       =====\n\n",data_read[0]&0xff,data_read[1]&0xff); 
+						MRd32(mem_ctrl + 0x3C, data_read, 2, 1, NO_PRINT_VALUES); 
+						printf("\n ====================================");
+						printf("\n ===       Platform Version       ===");
+						printf("\n =====      Version %2.2x.%2.2x       =====\n\n\n\n",data_read[0]&0xff,data_read[1]&0xff); 
+						
+						MRd32(mem_ctrl + 0x36, data_read, 1, 1, NO_PRINT_VALUES);   
+						printf("\n\n === Chip Number  ==="); 
+						printf("\n Number of Chip = %d", (pot2(data_read[0]>>4&0x03)));						
+							if ( ((data_read[0])&0x0F)==0 )
+							{
+								printf("\n Chip Size \t= 0 Mbit\n");	
+							} 
+							else
+							{
+								printf("\n Chip Size \t= %.0lf Mbit\n", pow(2, ((data_read[0]&0x0F)+3) ));
+							} 
+					}
+				srand(time(0));
+				uint32_t sram_waccess_type,sram_raccess_type;
+				uint8_t *dword_write,*dword_read;
+				uint32_t start_address,test_size;
+				printf("mem address is: %8.8x \n",(uint64_t)(mem_addr));
+				dword_write = (uint8_t*)calloc(4, sizeof(uint8_t));
+				dword_read = (uint8_t*)calloc(4, sizeof(uint8_t));
+				sram_waccess_type = 4;
+				sram_raccess_type = 4;
+				test_size			= 4;
+				start_address	= 0;
+				uint32_t x;
+				uint32_t j;
+				for (x = 0; x < 4; x++)
+				*(dword_write + x) = (uint8_t)(rand() & 0x000000FF);
+												
+				MWr32(mem_addr+start_address, dword_write, sram_waccess_type, sram_waccess_type, NO_PRINT_VALUES); 
+										
+				printf("\n");
+				printf("Read Mem Access Type:  Byte\n");
+				printf("Address (hex)          Data value (hex)\n");
+				printf("                       |          Dword|\n");
+									
+				MRd32(mem_addr+start_address, dword_read, sram_raccess_type, sram_raccess_type, 1);//NO_PRINT_VALUES);
+				
+				for(j = 0; j < 4; j++)
+				{
+					if (dword_write[j]!=dword_read[j]) 
+					{
+						printf("\n Error at address %d: Expected: 0x%2.2x got: 0x%2.2x\n",j,dword_write[j]&0xff,dword_read[j]&0xff); 
+						exit(-1);								
+					} 								
+				}/**/								
+				exit(0);
+				free(dword_write);
+				free(dword_read);
+			}
 
 	/* =====================================
 	========================================
@@ -1488,6 +1569,53 @@ int main(int argc, char **argv)
 	printf("\n ===================================");
 	printf("\n ===  IO MODULE (HW parameters)  ===");
 	printf("\n =====      Version %2.2x.%2.2x      =====",data_read[0]&0xff,data_read[1]&0xff); 
+	
+	
+	IORd(pcie_bar_io[0] + 0x24, data_read, 2, 1, NO_PRINT_VALUES);
+	printf("\n PLATFORM ID \t= %2.2x\n PLATFORM SP ID\t= %2.2x", data_read[0]&0xff,data_read[1]&0xff);	
+	IORd(pcie_bar_io[0] + 0x27, data_read, 1, 1, NO_PRINT_VALUES);
+	printf("\n CAPABILITIES \t= %2.2x", data_read[0]&0xff);
+	
+	printf("\n\n === CONFIGURATION ===");
+	IORd(pcie_bar_io[0] + 0x26, data_read, 1, 1, NO_PRINT_VALUES);
+	printf("\n DOUT_TYPE \t= %s", IO_TYPE((data_read[0]>>3)&0x1F));
+	printf("\n FEEDBACK WIDTH\t= %d", (((data_read[0]&0x07)+1)*8));	
+	IORd(pcie_bar_io[0] + 0x70, data_read, 4, 1, NO_PRINT_VALUES);
+	printf("\n Dout[7..0] feedback disable value \t= 0x%2.2x", (data_read[0]&0xff));
+	printf("\n Dout[15..8] feedback disable value \t= 0x%2.2x", (data_read[1]&0xff));
+	printf("\n Dout[23..16] feedback disable value \t= 0x%2.2x", (data_read[2]&0xff));
+	printf("\n Dout[31..24] feedback disable value \t= 0x%2.2x", (data_read[3]&0xff));
+	printf("\n ===================================");
+	
+	IORd(pcie_bar_io[0] + 0x20, data_read, 1, 1, NO_PRINT_VALUES);
+	printf("\n Authentication status: %s \n",AUTHENTICA(data_read[0]&0x01)); 
+	
+	printf("\n\n");
+	MRd32(mem_ctrl + 0x28, data_read, 2, 1, NO_PRINT_VALUES); 
+	printf("\n ====================================");
+	printf("\n === NVRAM MODULE (HW parameters) ===");
+	printf("\n =====      Version %2.2x.%2.2x       =====\n\n",data_read[0]&0xff,data_read[1]&0xff); 
+/*	MRd32(mem_ctrl + 0x3C, data_read, 2, 1, NO_PRINT_VALUES); 
+	printf("\n ====================================");
+	printf("\n ===       Platform Version       ===");
+	printf("\n =====      Version %2.2x.%2.2x       =====\n\n\n\n",data_read[0]&0xff,data_read[1]&0xff); 
+	*/					
+	MRd32(mem_ctrl + 0x36, data_read, 1, 1, NO_PRINT_VALUES);   
+	printf("\n\n === Chip Number/Size  ==="); 
+	printf("\n Number of Chip = %d", (pot2(data_read[0]>>4&0x03)));				
+		if ( ((data_read[0])&0x0F)==0 )
+		{
+			printf("\n Chip Size \t= 0 Mbit\n");	
+		} 
+		else
+		{
+			printf("\n Chip Size \t= %.0lf Mbit\n", pow(2, ((data_read[0]&0x0F)+3) ));
+		} 
+	MRd32(mem_ctrl + 0xBC, data_read, 1, 1, NO_PRINT_VALUES); 
+	printf("\n ====================================");
+	printf("\n ===  SECS MODULE (HW parameters) ===");
+	printf("\n =====      Version %2.2x.%2.2x       =====\n\n",data_read[0]&0xff,data_read[1]&0xff); 	
+	printf("\n ====================================");
 	
 	
 	 /* ======================================
@@ -1556,7 +1684,7 @@ int main(int argc, char **argv)
 		printf("\n\n"); 
 		printf("====================================\n");  
 		printf("===                              ===\n");  
-		printf("===   FPGA CERTUS DEMO UTILITY    ===\n"); 
+		printf("===   FPGA CERTUS DEMO UTILITY   ===\n"); 
 		printf("===      Ver %d.%d  %s    ===\n",ver_major,ver_minor,date);  
 		printf("===                              ===\n");   
 		printf("===========  DEMO MENU  ============\n\n");		
@@ -1564,6 +1692,7 @@ int main(int argc, char **argv)
 		printf("Cmd_2 : xSPI MRAM Write Read access \n");	
 		printf("Cmd_3 : Stress A Read ID (IOrd32)   \n");
 		printf("Cmd_4 : Stress B Mem Write (MemWr)  \n\n");
+		printf("Cmd_10: Advanced Program SRAM CFG nByte \n");
 		printf("============ FPGA FLASH CMD ===============        (last fpga byte 0x1d6B99)\n");
 		printf("Cmd_20: Get device id and manufacture id (FPGA FLASH) \n");
 		printf("Cmd_21: Read Status Register (FPGA FLASH) \n");
@@ -1579,11 +1708,44 @@ int main(int argc, char **argv)
 		printf("Cmd_61: SRAM Write Test from 0 to MAX size in Mirror mode (stress test for consumption)\n");
 		printf("Cmd_62: SRAM Write Test and Read back/verify from 0 to MAX size in Normal mode 64\n");
 		printf("Cmd_63: SRAM Write Read access\n");	
+		printf("=============== DIO TEST ==================\n");
+		printf("Cmd_70: DIN status\n");
+		printf("Cmd_71: DIN interrupt test\n");
+		printf("Cmd_72: Set Dout all ON/OFF\n");
+		printf("Cmd_73: Set Dout and readback Feedback\n");
+		printf("Cmd_74: Set Dout and read DIN status\n");
+		printf("Cmd_75: Check Feedback\n");
 		printf("=========== PCIe utility ===========\n\n");
 		printf("Cmd_99: Get PCIe status/Enable PCIe \n");
 		printf("        Set command reg             \n\n");
 		printf("====================================\n"); 
 		printf("\n"); 
+		
+		MRd32(mem_ctrl + 0xD0, data_read, 4, 1, NO_PRINT_VALUES); 
+		uint32_t expected_id_31_0 	= 0x3402a04a;
+		uint32_t expected_id_63_32 	= 0x21b82430;
+		uint32_t expected_id_95_64 	= 0x04503d7f;
+		uint32_t expected_id_127_96 = 0x11eab905;
+		printf("\n ===      Unique ID key      ===");
+		printf("\n =====    ID31..0: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 	
+		// 
+		uint32_t id_31_0 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
+		(id_31_0 != expected_id_31_0) ? printf(" ERRORE ") : printf(" OK ") ;  
+		MRd32(mem_ctrl + 0xD4, data_read, 4, 1, NO_PRINT_VALUES);         
+		printf("\n =====    ID63..32: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 					
+		// 
+		uint32_t id_63_32 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
+		(id_63_32 != expected_id_63_32) ? printf(" ERRORE ") : printf(" OK ") ; 
+		MRd32(mem_ctrl + 0xD8, data_read, 4, 1, NO_PRINT_VALUES); 
+		printf("\n =====    ID95..64: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 					
+		// 
+		uint32_t id_95_64 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
+		(id_95_64 != expected_id_95_64) ? printf(" ERRORE ") : printf(" OK ") ; 
+		MRd32(mem_ctrl + 0xDC, data_read, 4, 1, NO_PRINT_VALUES); 
+		printf("\n =====    ID127..96: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 					
+		// 
+		uint32_t id_127_96 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
+		(id_127_96 != expected_id_127_96) ? printf(" ERRORE \n\n") : printf(" OK \n\n") ; 
 	
 		//IORd(pcie_bar_mem[1] + 0x14, data_read, 2, 1, NO_PRINT_VALUES); 
 		printf("type 0 to exit \n");
@@ -1652,15 +1814,15 @@ int main(int argc, char **argv)
 									printf("--   JESD reset          \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES); 
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES); 
 									} while (!(readSTATUS[0] & 0x01));
 									
 									//*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
 									writeCTRL[0] =0x01;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 																
 	/* 								MWr32(mem_addr+i, &writeBuffer[i], sram_access_type, sram_access_type, NO_PRINT_VALUES); 
 									i += sram_access_type;	
@@ -1677,13 +1839,13 @@ int main(int argc, char **argv)
 									printf("--   Read MAN ID CMD       (x1)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x02;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									
 								break;
 								} 
@@ -1692,13 +1854,13 @@ int main(int argc, char **argv)
 									printf("--   Write Enable 0x06     (x1)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x10;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									
 								break;
 								} 
@@ -1707,13 +1869,13 @@ int main(int argc, char **argv)
 									printf("--   DFIM entry           (x1)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x20;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									
 								break;
 								} 							
@@ -1722,13 +1884,13 @@ int main(int argc, char **argv)
 									printf("--   Init Status Reg 0x01  (x1)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x40;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									
 								break;
 								} 
@@ -1737,13 +1899,13 @@ int main(int argc, char **argv)
 									printf("--   Init NVR  xb1        (x1)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x80;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									
 								break;
 								}  
@@ -1752,15 +1914,15 @@ int main(int argc, char **argv)
 									printf("--   Init OTP x42      (x1)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x20;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									
 								break;
 								} 
@@ -1769,17 +1931,17 @@ int main(int argc, char **argv)
 									printf("--   Init mem Array  0xC7  (x1)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));writeCTRL[0] =0x00;	
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x40;		
 									writeCTRL[2] =0x00;		
-									MWr32(mem_addr+0x10000001, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 								break;
 								}
 							case 8:
@@ -1787,15 +1949,15 @@ int main(int argc, char **argv)
 									printf("--   Exit DFIM        (x1)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x10;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									
 								break;
 								} 
@@ -1804,15 +1966,15 @@ int main(int argc, char **argv)
 									printf("--  Write NVR to octal      (x1)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x04;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									
 								break;
 								} 
@@ -1821,15 +1983,15 @@ int main(int argc, char **argv)
 									printf("--   Read NVR      (x1)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x08;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									
 								break;
 								}
@@ -1838,15 +2000,15 @@ int main(int argc, char **argv)
 									printf("--   Soft Reset         (x1)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x02;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 																
 								break;
 								}
@@ -1855,17 +2017,17 @@ int main(int argc, char **argv)
 									printf("--   Write VR         (x1)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x04;		
 									writeCTRL[2] =0x00;		
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 								break;
 								}							
 							case 13:
@@ -1873,17 +2035,17 @@ int main(int argc, char **argv)
 									printf("--   Read NVR          (x8)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;		
 									writeCTRL[2] =0x04;		
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;			
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									
 								break;
 								}
@@ -1892,17 +2054,17 @@ int main(int argc, char **argv)
 									printf("--   Dev Man ID         (x8)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;		
 									writeCTRL[2] =0x01;		
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;			
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									
 								break;
 								}
@@ -1911,17 +2073,17 @@ int main(int argc, char **argv)
 									printf("--   Read VR       (x8)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;		
 									writeCTRL[2] =0x20;	
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;			
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									
 								break;
 								} 
@@ -1930,17 +2092,17 @@ int main(int argc, char **argv)
 									printf("--   Write NVR       (x8)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;		
 									writeCTRL[2] =0x02;	
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;			
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									
 								break;
 								} 
@@ -1949,15 +2111,15 @@ int main(int argc, char **argv)
 									printf("--   Write VR       (x8)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x80;	
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									
 								break;
 								} 
@@ -1966,17 +2128,17 @@ int main(int argc, char **argv)
 									printf("--   Wel and SR=(0x00)    (x8)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;		
 									writeCTRL[2] =0x40;	
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;			
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									
 								break;
 								} 
@@ -1985,11 +2147,11 @@ int main(int argc, char **argv)
 									printf("--   Enter in User mode           \n");
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x01;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									usleep(1000);
 									if ((readSTATUS[0] & 0x02)) printf("--   SUCCESS          \n");
 									
@@ -2000,60 +2162,60 @@ int main(int argc, char **argv)
 									printf("--   JESD + WEL + SR -> x00 + oSPI + reset        \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES); 
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES); 
 									} while (!(readSTATUS[0] & 0x01));
 									
 									//*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
 									writeCTRL[0] =0x01;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x10;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x08;		
 									writeCTRL[2] =0x00;		
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x08;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000000, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl, &writeCTRL[0], 4, 4, NO_PRINT_VALUES); 
 									
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x02;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									
 								break;
 								}
@@ -2062,17 +2224,17 @@ int main(int argc, char **argv)
 									printf("--   Soft Reset 0x66 -> 0x99  (x8)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));writeCTRL[0] =0x00;	
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;		
 									writeCTRL[2] =0x80;		
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;			
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 								break;
 								}
 							case 24:
@@ -2081,44 +2243,44 @@ int main(int argc, char **argv)
 									
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));writeCTRL[0] =0x00;	
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;		
 									writeCTRL[2] =0x80;		
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;			
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									
 									usleep(100*1000);
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;		
 									writeCTRL[2] =0x40;	
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;			
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x01;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									
 									
 								break;
@@ -2129,42 +2291,42 @@ int main(int argc, char **argv)
 									
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x02;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									
 									usleep(100*1000);
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;		
 									writeCTRL[2] =0x40;	
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;			
-									MWr32(mem_addr+0x10000002, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x02, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x01;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;			
-									MWr32(mem_addr+0x10000001, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x01, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									
 									
 								break;
@@ -2174,9 +2336,9 @@ int main(int argc, char **argv)
 									printf("--   Check status  \n");
 									// check in MANUAL_CMD_DECODE status 
 									/* do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01)); */
-									MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);
+									MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);
 									printf("\n Status is = %2.2x\n", readSTATUS[0]&0xff);
 									
 									
@@ -2189,13 +2351,13 @@ int main(int argc, char **argv)
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;	
 									writeCTRL[3] =0x80;			
-									MWr32(mem_addr+0x10000003, &writeCTRL[3], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x03, &writeCTRL[3], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;	
 									writeCTRL[3] =0x00;			
-									MWr32(mem_addr+0x10000003, &writeCTRL[3], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x03, &writeCTRL[3], 1, 1, NO_PRINT_VALUES); 
 									usleep(1000);
 									if (readSTATUS[0] & 0x01) printf("--   SUCCESS          \n");
 									
@@ -2207,12 +2369,12 @@ int main(int argc, char **argv)
 									printf("--   Read content of NVR  \n");
 									// check in MANUAL_CMD_DECODE status 
 									/* do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01)); */
-									MRd32(mem_addr +0x10000000 + 0x14, nvregister, 4, 4, NO_PRINT_VALUES);
+									MRd32(mem_ctrl + 0x14, nvregister, 4, 4, NO_PRINT_VALUES);
 									printf("\n NVR0 = %2.2x\n NVR1 = %2.2x\n NVR2 = %2.2x\n NVR3 = %2.2x", nvregister[0]&0xff,nvregister[1]&0xff, nvregister[2]&0xff,nvregister[3]&0xff);
 									
-									MRd32(mem_addr +0x10000000 + 0x18, nvregister, 4, 4, NO_PRINT_VALUES);
+									MRd32(mem_ctrl + 0x18, nvregister, 4, 4, NO_PRINT_VALUES);
 									printf("\n NVR4 = %2.2x\n NVR5 = %2.2x\n NVR6 = %2.2x\n NVR7 = %2.2x\n\n", nvregister[0]&0xff,nvregister[1]&0xff, nvregister[2]&0xff,nvregister[3]&0xff);
 									
 								break;
@@ -2223,19 +2385,19 @@ int main(int argc, char **argv)
 									printf("--   Read ISR       (x8)  \n");
 									// check in MANUAL_CMD_DECODE status 
 									do{ 
-										MRd32(mem_addr +0x10000000 + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
+										MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);      
 									} while (!(readSTATUS[0] & 0x01));
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;		
 									writeCTRL[2] =0x00;			
 									writeCTRL[3] =0x01;
-									MWr32(mem_addr+0x10000003, &writeCTRL[3], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x03, &writeCTRL[3], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;	
 									writeCTRL[3] =0x00;			
-									MWr32(mem_addr+0x10000003, &writeCTRL[3], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl+0x03, &writeCTRL[3], 1, 1, NO_PRINT_VALUES); 
 									
 								break;
 								} 
@@ -2262,24 +2424,38 @@ int main(int argc, char **argv)
 						#endif 
 						
 						printf("\n\n");
-						IORd(pcie_bar_mem[1] + 0x14, data_read, 2, 1, NO_PRINT_VALUES); 
-						printf("\n ===================================");
-						printf("\n === SRAM MODULE (HW parameters) ===");
-						printf("\n =====      Version %2.2x.%2.2x      =====\n",data_read[0]&0xff,data_read[1]&0xff); 
-						#if _DEBUG	
-						{	
-							printf("\n\n === MODE REGISTER READ ===");
-							IORd(pcie_bar_mem[1] + 0x0C, data_read, 1, 1, 1);
-						}; 
-						#endif 
+						MRd32(mem_ctrl + 0x28, data_read, 2, 1, NO_PRINT_VALUES); 
+						printf("\n ====================================");
+						printf("\n === NVRAM MODULE (HW parameters) ===");
+						printf("\n =====      Version %2.2x.%2.2x       =====\n\n",data_read[0]&0xff,data_read[1]&0xff); 
+						MRd32(mem_ctrl + 0x3C, data_read, 2, 1, NO_PRINT_VALUES); 
+						printf("\n ====================================");
+						printf("\n ===       Platform Version       ===");
+						printf("\n =====      Version %2.2x.%2.2x       =====\n\n\n\n",data_read[0]&0xff,data_read[1]&0xff); 
+						
+						MRd32(mem_ctrl + 0x36, data_read, 1, 1, NO_PRINT_VALUES);   
+						printf("\n\n === Chip Number  ==="); 
+						printf("\n Number of Chip = %d", (pot2(data_read[0]>>4&0x03)));						
+							if ( ((data_read[0])&0x0F)==0 )
+							{
+								printf("\n Chip Size \t= 0 Mbit\n");	
+							} 
+							else
+							{
+								printf("\n Chip Size \t= %.0lf Mbit\n", pow(2, ((data_read[0]&0x0F)+3) ));
+							} 
+													
 						
 						uint32_t sram_waccess_type,sram_raccess_type;
 						uint32_t nvram_sel;
 						
 						uint8_t *writeBuffer;
 						uint8_t *readBuffer;
+						uint8_t *ctrlBuffer;
 						uint32_t sram_mode_num;
 						uint32_t start_address;
+						uint32_t wr_offset;
+						uint32_t rd_offset;
 						
 						uint32_t x;
 						uint32_t i;
@@ -2288,11 +2464,13 @@ int main(int argc, char **argv)
 						uint32_t data_type;
 						
 						printf("-- =================================\n");
-						printf("--       SRAM command               \n");		
+						printf("--       SRAM command               \n");
+						printf("--  (0) Get MRAM bar 1 info         \n");						
 						printf("--  (1) Write Access                \n");
 						printf("--  (2) Read Access                 \n");
 						printf("--  (3) Test Write Read Access      \n");
-						printf("--  (4) Exit                        \n");
+						printf("--  (4) Not Alligned chiappa su     \n");
+						printf("--  (5) Exit                        \n");
 						printf("-- =================================\n");
 						
 						
@@ -2304,6 +2482,29 @@ int main(int argc, char **argv)
 						
 						switch(nvram_sel)
 						{
+							case 0:
+								{	
+									bufferSize = 64;  
+									sram_raccess_type = 8;									
+									
+									ctrlBuffer = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
+									printf("\n\n GET BAR1 image see below:  ");
+									i=0;
+									while (i < 64)
+										{
+											MRd32(mem_ctrl+i, &ctrlBuffer[i], sram_raccess_type, sram_raccess_type, 1);//NO_PRINT_VALUES);
+									
+											/*for(j = i; j < (i+sram_access_type); j++)
+											{
+												if ((writeBuffer[j]!=ctrlBuffer[j]) && j<256) printf("\n Error at address %d: Expected: 0x%2.2x got: 0x%2.2x\n",j,writeBuffer[j]&0xff,readBuffer[j]&0xff); 
+											}*/
+											i += sram_raccess_type;		
+		  
+										}
+									
+									free(ctrlBuffer);
+								break;
+								} 
 							case 1:
 								{				
 									bufferSize = nvramMaxSize;   // temp	
@@ -2353,7 +2554,7 @@ int main(int argc, char **argv)
 									printf("--  (1) 0xFF            \n");
 									printf("--  (2) 0x00            \n");
 									printf("--  (3) Consecutive     \n");
-									printf("--  (4) Dword_type     \n");
+									printf("--  (4) Dword_type      \n");
 									printf("--  (5) Random          \n");
 									printf("-- =====================\n");
 						
@@ -2423,6 +2624,12 @@ int main(int argc, char **argv)
 									}; 
 									#endif 
 									
+/* 												// debug
+												bufferSize = 16;  
+												sram_raccess_type = 4;	
+												ctrlBuffer = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
+												MRd32(mem_ctrl+0x34, &ctrlBuffer[0], sram_raccess_type, sram_raccess_type, 1);//NO_PRINT_VALUES);
+												free(ctrlBuffer); */
 									// Measure the time taken to access an element
 									// Start time
 									start = std::chrono::high_resolution_clock::now();
@@ -2468,6 +2675,7 @@ int main(int argc, char **argv)
 										case 2:
 										case 4:
 										case 8:
+										case 16:
 										{	
 											break;
 										}
@@ -2504,6 +2712,33 @@ int main(int argc, char **argv)
 									#endif 
 								
 									i = 0;
+									switch(sram_raccess_type)
+									{
+										case 1: // 1 byte
+										break;
+
+										case 2 :	// 2 bytes - 1Word
+										break;
+										
+										case 4:	// 4 bytes - 1DWord
+											printf("\n");
+											printf("Read Mem Access Type:  Byte\n");
+											printf("Address (hex)          Data value (hex)\n");
+											printf("                       |          Dword|\n");
+										break;
+									
+										default:
+											//printf("Error! wrong byte alligned value: type %d expected 1, 2 or 4 \n",byte_alligned);
+										break;	
+									};
+/* 												// debug
+												bufferSize = 4;  
+												sram_raccess_type = 4;	
+												ctrlBuffer = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
+												MRd32(mem_ctrl+0x34, &ctrlBuffer[i], sram_raccess_type, sram_raccess_type, 1);//NO_PRINT_VALUES);
+												free(ctrlBuffer); */
+									
+									printf("mem address is: %8.8x \n",(uint64_t)(mem_addr));
 									while (i < test_size)
 										{
 											MRd32(mem_addr+i+start_address, &readBuffer[i], sram_raccess_type, sram_raccess_type, 1);//NO_PRINT_VALUES);
@@ -2587,9 +2822,10 @@ int main(int argc, char **argv)
 						writeBuffer00 = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
 						
 						uint32_t rpt=0;
+						uint32_t total_rpt=0;
 						//while (rpt < 12)
 						//while (rpt < 13)
-						while (rpt < 9)
+						while (rpt < 13)
 						{			
 									switch(rpt)
 									{
@@ -2597,81 +2833,97 @@ int main(int argc, char **argv)
 											{	
 												sram_waccess_type = 2;  // Word
 												sram_raccess_type = 2;  // Word
+												rpt++; // check if number of iteration is infinite	
 												break;
 											} 
 										case 1:
 											{	
 												sram_waccess_type = 2;  // Word
 												sram_raccess_type = 4;  // Dword
+												rpt++; // check if number of iteration is infinite	
 												break;
 											} 
 										case 2:
 											{	
 												sram_waccess_type = 4;  // Dword
 												sram_raccess_type = 2;  // Word
+												rpt++; // check if number of iteration is infinite	
 												break;
 											}  
 										case 3:
 											{	
 												sram_waccess_type = 4;  // Dword
 												sram_raccess_type = 4;  // Dword
+												rpt++; // check if number of iteration is infinite	
 												break;
 											}  
 										case 4:
 											{	
 												sram_waccess_type = 8;  // Qword
 												sram_raccess_type = 2;  // Word
+												rpt++; // check if number of iteration is infinite	
 												break;
 											} 
 										case 5:
 											{	
 												sram_waccess_type = 8;  // Qword
 												sram_raccess_type = 4;  // Dword
+												rpt++; // check if number of iteration is infinite	
 												break;
 											} 
 										case 6:
 											{	
 												sram_waccess_type = 2;  // Word
 												sram_raccess_type = 8;  // Qword
+												rpt++; // check if number of iteration is infinite	
 												break;
 											}  
 										case 7:
 											{	
 												sram_waccess_type = 4;  // Dword
 												sram_raccess_type = 8;  // Qword
+												rpt++; // check if number of iteration is infinite	
 												break;
 											}  
 										case 8:
 											{	
 												sram_waccess_type = 8;  // Qword
 												sram_raccess_type = 8;  // Qword
+												rpt++; // check if number of iteration is infinite	
 												break;
 											}  
 										case 9:
 											{	
 												sram_waccess_type = 16;  // Oword
 												sram_raccess_type = 2;   // Word
+												rpt++; // check if number of iteration is infinite	
 												break;
 											} 
 										case 10:
 											{	
 												sram_waccess_type = 16;  // Oword
 												sram_raccess_type = 4;   // Dword
+												rpt++; // check if number of iteration is infinite	
 												break;
 											} 
 										case 11:
 											{	
 												sram_waccess_type = 16;  // Oword
 												sram_raccess_type = 8;   // Qword
+												rpt++; // check if number of iteration is infinite	
 												break;
 											} 
 										default:
 											{	
 												sram_waccess_type = 4;  // Dword
 												sram_raccess_type = 4;  // Dword
+												rpt=0; // check if number of iteration is infinite	
 												break;
 											}  
 									} 
+									total_rpt++;
+									printf("Incremental rpt are: %d.\n", total_rpt);
+									
 									// erase mem
 									i = 0;
 									//printf("write buffer...\n");	
@@ -2713,6 +2965,334 @@ int main(int argc, char **argv)
 									
 										
 								
+									//wait_to_continue();
+									usleep(1*1000*1000);
+						}	
+						
+								free(writeBuffer);
+								free(readBuffer);
+								break;
+								}
+							case 4:
+								{	
+									wr_offset 	= 0;
+									rd_offset 	= 0;
+									bufferSize  = nvramMaxSize; 
+									readBuffer  = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
+									writeBuffer = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
+									
+									printf("\n\n How many byte to write ? [0..%d]: ",bufferSize);
+									if ((ret_code=scanf("%d", &test_size))!=1)
+									{
+										printf("function read error %d\n",ret_code);
+									};
+									
+									// max write byte size is Memory max size
+									if (test_size > bufferSize) test_size=8388608;//bufferSize;
+
+									
+									printf("\n\n Which address do you want to write to ? [0..%d]: ",bufferSize);
+									if ((ret_code=scanf("%d", &start_address))!=1)
+									{
+										printf("function read error %d\n",ret_code);
+									};
+									
+									
+									
+									
+									printf("-- =================================\n");
+									printf("--       SRAM MODE                  \n");		
+									printf("--  (1) Consecutive Data            \n");
+									printf("--  (2) Random Data                 \n");
+									printf("--  (3)                             \n");
+									printf("--  (4)                             \n");
+									printf("-- =================================\n");
+						
+									printf("\n\n Data Type ? [1..5]: ");
+									if ((ret_code=scanf("%d", &data_type))!=1)
+									{
+										printf("function read error %d\n",ret_code);
+									};
+									
+									switch(data_type)
+									{
+										case 1:
+											{	
+												printf("Assigning consecutive values to a %u bytes local buffer...\n", test_size);
+												for (x = 0; x < test_size; x++)
+												*(writeBuffer + x) = (uint8_t)(x);
+												break;
+											} 
+										case 2:
+											{	
+												printf("Assigning random values to a %u bytes local buffer...\n", test_size);
+												for (x = 0; x < test_size; x++)
+												*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
+												break;
+											}  
+										default:
+											{	
+												printf("Assigning random values to a %u bytes local buffer...\n", test_size);
+												for (x = 0; x < test_size; x++)
+												*(writeBuffer + x) = (uint8_t)(rand() & 0x000000FF);
+												break;
+											}  
+									} 
+								
+						uint8_t *writeBuffer00;	
+						writeBuffer00 = (uint8_t*)calloc(bufferSize, sizeof(uint8_t));
+						
+						uint32_t case_type=0;
+						//while (rpt < 12)
+						//while (rpt < 13)
+						//while (case_type < 24)
+							uint32_t rpt=0;
+						while (rpt < 24)
+						{			
+									switch(rpt)//case_type)
+									{
+										case 0:
+											{	
+												sram_waccess_type = 2;  // Word
+												sram_raccess_type = 2;  // Word
+												wr_offset		  = 1;
+												rd_offset		  = 1;
+												break;
+											} 
+										case 1:
+											{	
+												sram_waccess_type = 2;  // Word
+												sram_raccess_type = 4;  // Dword
+												wr_offset		  = 1;
+												rd_offset		  = 1;
+												break;
+											} 
+										case 2:
+											{	
+												sram_waccess_type = 2;  // Word
+												sram_raccess_type = 4;  // Dword
+												wr_offset		  = 2;
+												rd_offset		  = 2;
+												break;
+											} 
+										case 3:
+											{	
+												sram_waccess_type = 2;  // Word
+												sram_raccess_type = 4;  // Dword
+												wr_offset		  = 3;
+												rd_offset		  = 3;
+												break;
+											} 
+										case 5:
+											{	
+												sram_waccess_type = 4;  // Dword
+												sram_raccess_type = 2;  // Word
+												wr_offset		  = 1;
+												rd_offset		  = 1;
+												break;
+											}  
+										case 6:
+											{	
+												sram_waccess_type = 4;  // Dword
+												sram_raccess_type = 2;  // Word
+												wr_offset		  = 2;
+												rd_offset		  = 2;
+												break;
+											}  
+										case 7:
+											{	
+												sram_waccess_type = 4;  // Dword
+												sram_raccess_type = 2;  // Word
+												wr_offset		  = 3;
+												rd_offset		  = 3;
+												break;
+											}  
+										case 8:
+											{	
+												sram_waccess_type = 4;  // Dword
+												sram_raccess_type = 4;  // Dword
+												wr_offset		  = 1;
+												rd_offset		  = 1;
+												break;
+											}  
+										case 9:
+											{	
+												sram_waccess_type = 4;  // Dword
+												sram_raccess_type = 4;  // Dword
+												wr_offset		  = 2;
+												rd_offset		  = 2;
+												break;
+											} 
+										case 10:
+											{	
+												sram_waccess_type = 4;  // Dword
+												sram_raccess_type = 4;  // Dword
+												wr_offset		  = 3;
+												rd_offset		  = 3;
+												break;
+											} 
+										case 11:
+											{	
+												sram_waccess_type = 8;  // Qword
+												sram_raccess_type = 2;  // Word
+												wr_offset		  = 1;
+												rd_offset		  = 1;
+												break;
+											} 
+										case 12:
+											{	
+												sram_waccess_type = 8;  // Qword
+												sram_raccess_type = 2;  // Word
+												wr_offset		  = 2;
+												rd_offset		  = 2;
+												break;
+											} 
+										case 13:
+											{	
+												sram_waccess_type = 8;  // Qword
+												sram_raccess_type = 2;  // Word
+												wr_offset		  = 3;
+												rd_offset		  = 3;
+												break;
+											} 
+										case 14:
+											{	
+												sram_waccess_type = 8;  // Qword
+												sram_raccess_type = 2;  // Word
+												wr_offset		  = 4;
+												rd_offset		  = 4;
+												break;
+											} 
+										case 15:
+											{	
+												sram_waccess_type = 8;  // Qword
+												sram_raccess_type = 2;  // Word
+												wr_offset		  = 5;
+												rd_offset		  = 5;
+												break;
+											} 
+										case 16:
+											{	
+												sram_waccess_type = 8;  // Qword
+												sram_raccess_type = 2;  // Word
+												wr_offset		  = 6;
+												rd_offset		  = 6;
+												break;
+											} 
+										case 17:
+											{	
+												sram_waccess_type = 8;  // Qword
+												sram_raccess_type = 2;  // Word
+												wr_offset		  = 7;
+												rd_offset		  = 7;
+												break;
+											} 
+										case 18:
+											{	
+												sram_waccess_type = 8;  // Qword
+												sram_raccess_type = 4;  // Dword
+												wr_offset		  = 1;
+												rd_offset		  = 1;
+												break;
+											} 
+										case 19:
+											{	
+												sram_waccess_type = 2;  // Word
+												sram_raccess_type = 8;  // Qword
+												wr_offset		  = 1;
+												rd_offset		  = 1;
+												break;
+											}  
+										case 20:
+											{	
+												sram_waccess_type = 4;  // Dword
+												sram_raccess_type = 8;  // Qword
+												wr_offset		  = 1;
+												rd_offset		  = 1;
+												break;
+											}  
+										case 21:
+											{	
+												sram_waccess_type = 8;  // Qword
+												sram_raccess_type = 8;  // Qword
+												wr_offset		  = 1;
+												rd_offset		  = 1;
+												break;
+											}  
+										case 22:
+											{	
+												sram_waccess_type = 16;  // Oword
+												sram_raccess_type = 2;   // Word
+												wr_offset		  = 1;
+												rd_offset		  = 1;
+												break;
+											} 
+										case 23:
+											{	
+												sram_waccess_type = 16;  // Oword
+												sram_raccess_type = 4;   // Dword
+												wr_offset		  = 1;
+												rd_offset		  = 1;
+												break;
+											} 
+										case 24:
+											{	
+												sram_waccess_type = 16;  // Oword
+												sram_raccess_type = 8;   // Qword
+												wr_offset		  = 1;
+												rd_offset		  = 1;
+												break;
+											} 
+										default:
+											{	
+												sram_waccess_type = 4;  // Dword
+												sram_raccess_type = 4;  // Dword
+												wr_offset		  = 1;
+												rd_offset		  = 1;
+												break;
+											}  
+									} 
+									// erase mem
+									i = 0;
+									//printf("write buffer...\n");	
+									while (i < test_size)
+										{
+											MWr32(mem_addr+i+start_address, &writeBuffer00[i], 4, 4, NO_PRINT_VALUES); 
+											i += 4;		
+										}
+										
+									printf("Write @ %d bytes access type and read @ %d bytes access type from/to address %d...\n", sram_waccess_type,sram_raccess_type,wr_offset);
+									i = 0;
+									printf("write buffer...\n");												
+									while (i < test_size)//*1000)
+										{
+											MWr32(mem_addr+i+start_address+wr_offset, &writeBuffer[i], sram_waccess_type, sram_waccess_type, NO_PRINT_VALUES); 
+											i += sram_waccess_type;		
+										}
+											
+									i = 0;
+									printf("read buffer...\n");
+									while (i < test_size)
+										{
+											MRd32(mem_addr+i+start_address+rd_offset, &readBuffer[i], sram_raccess_type, sram_raccess_type, NO_PRINT_VALUES);//1);//NO_PRINT_VALUES);
+									
+											/**/for(j = i; j < (i+sram_raccess_type); j++)
+											{
+												if (writeBuffer[j]!=readBuffer[j]) printf("\n Error at address %d: Expected: 0x%2.2x got: 0x%2.2x\n",j,writeBuffer[j]&0xff,readBuffer[j]&0xff); 
+											}/**/
+			//								MRd32(mem_addr+i+start_address, &readBuffer[i], sram_raccess_type, sram_raccess_type, NO_PRINT_VALUES);//1);//NO_PRINT_VALUES);
+			//							
+			//									/**/for(j = i; j < (i+sram_raccess_type); j++)
+			//									{
+			//										if (writeBuffer[j]!=readBuffer[j]) printf("\n Error at address %d: Expected: 0x%2.2x got: 0x%2.2x\n",j,writeBuffer[j]&0xff,readBuffer[j]&0xff); 
+			//									}/**/
+			//									
+											i += sram_raccess_type;		
+		  
+										}
+									
+										
+								
 									rpt++; // check if number of iteration is infinite	
 								
 									//wait_to_continue();
@@ -2723,7 +3303,7 @@ int main(int argc, char **argv)
 								free(readBuffer);
 								break;
 								}
-							case 4:
+							case 6:
 								{	
 									break;
 								}
@@ -2841,6 +3421,69 @@ int main(int argc, char **argv)
 						break;
 						return 0;
 					} 
+					
+				case 10:
+					{
+						/*
+						printf("-- ===================================================================================\n");
+						printf("--    chip_num[1..0]    |          chip_size[3..0]                | sram_type[1..0] \n");
+						printf("-- 00 SRAM1 installed   | 0000  0 Mbit SRAMs  1000  TBD           |    00   SRAM\n");
+						printf("-- 01 SRAM1~2 installed | 0001  TBD           1001  TBD           |    01   Fast SRAM\n");
+						printf("-- 10 SRAM1~4 installed | 0010  TBD           1010   2 Mbit SRAMs |    10   MRAM\n");
+						printf("-- 11 SRAM1~8 installed | 0011  TBD           1011   4 Mbit SRAMs |   others tbd   \n");
+						printf("--                      | 0100  TBD           1100   8 Mbit SRAMs | \n");
+						printf("--                      | 0101  TBD           1101  16 Mbit SRAMs | \n");
+						printf("--                      | 0110  TBD           1110  32 Mbit SRAMs | \n");
+						printf("--                      | 0111  TBD           1111  64 Mbit SRAMs | \n");
+						printf("-- ===================================================================================\n");
+						//start_addr[3]= {0x00,0x00,0x00};
+						printf("How Many Banks/Chips ? [0 = 1 SRAM module, 1 = 2 SRAM modules, 2 = 4 SRAM modules, 3 = 8 SRAM modules] ");
+						if ((ret_code=scanf("%d", &nbanks))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};*/
+
+						printf("\nInsert one of the following Chip size \n");
+						printf("   ====================================\n");
+						printf("   0  0 Mbit SRAMs    8   TBD           \n");
+						printf("   1  16 Mbit SRAMs   9   TBD           \n");
+						printf("   2  32 Mbit SRAMs   10  TBD           \n");
+						printf("   3  64 Mbit SRAMs   11  TBD           \n");
+						printf("   4  128 Mbit SRAMs  12  TBD           \n");
+						printf("   5  TBD             13  TBD           \n");
+						printf("   6  TBD             14  TBD           \n");
+						printf("   7  TBD             15  TBD           \n");
+						printf("   ====================================\n");
+						printf("Which is the chip size ? [0..15] ");
+						if ((ret_code=scanf("%d", &chipsize))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+						
+						/*
+						printf("Which SRAM type is mounted ? [0 - SRAM, 1 - FAST SRAM, 2 - MRAM] ");
+						if ((ret_code=scanf("%d", &sramtype))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+						*/
+						//byte0 = (((sramtype & 0xFF)<<6) | ((chipsize & 0xFF)<<2) | ((nbanks-1) & 0xFF));
+						//data_write[0]=(((nbanks) & 0x03)<<4) | (chipsize & 0x0F));
+						data_write[0]=(0x10 | (chipsize & 0x0F));
+						printf("byte is %2.2x\n",data_write[0]);
+						
+						
+						MWr32(mem_ctrl + 0x36, data_write, 1, 1, NO_PRINT_VALUES); 
+						#if _DEBUG
+						{
+							//printf("nbanks is %2.2x\n",(pot2(nbanks) & 0xFF));
+							printf("chipsize is %2.2x\n",(chipsize & 0xFF));
+						}; 
+						#endif
+						
+						wait_to_continue();
+						break;
+					}
 						
 				case 20:
 					{					
@@ -3121,7 +3764,568 @@ int main(int argc, char **argv)
 						wait_to_continue();
 						break;
 						return 0;
+					}  
+					
+				case 70 : 
+					{
+						
+							
+						printf("-- ============================\n");
+						printf("--       Get DIN status        \n");	
+						printf("-- ============================\n");
+						
+						for(i = 0; i < 32; i++)
+						{
+							IORd(pcie_bar_io[0] + 0x00, data_read, 4, 1, NO_PRINT_VALUES);      
+							printf("\n Din[31..0]  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							IORd(pcie_bar_io[0] + 0x04, data_read, 4, 1, NO_PRINT_VALUES);      
+							printf("\n Din[63..32] = 0x%2.2x.%2.2x.%2.2x.%2.2x\n",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							
+							usleep(1*1000*1000);
+						}
+						wait_to_continue();
+						break;
+						return 0;
 					}  	
+						
+			
+				case 71 : 
+					{
+						// disable debounce
+						data_write[0] = 0x00; 
+						data_write[1] = 0x00;  
+						data_write[2] = 0x00; 	
+						data_write[3] = 0x00;  
+							
+						IOWr(pcie_bar_io[0] + 0x3C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3D, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3E, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3F, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x40, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x41, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x42, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x43, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						
+						// enable interrupt
+						data_write[0] = 0xff; 
+						IOWr(pcie_bar_io[0] + 0x08, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x09, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x0A, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x0B, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x0C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x0D, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x0E, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x0F, data_write, 1, 1, 0, NO_PRINT_VALUES);
+						
+						// enable interrupt rising edge
+						IOWr(pcie_bar_io[0] + 0x00, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x01, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x02, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x03, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x04, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x05, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x06, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x07, data_write, 1, 1, 0, NO_PRINT_VALUES);
+						
+						data_write[0] = 0x08; 
+						IOWr(pcie_bar_io[0] + 0x28, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						
+						// ISR and Interrupt register cleaning up
+						IORd(pcie_bar_io[0] + 0x28, data_read, 1, 1, NO_PRINT_VALUES);
+						#if _DEBUG	
+							{	
+								printf("\n Status Register = 0x%2.2x\n",data_read[0]&0xff); 
+							}; 
+						#endif   
+						IORd(pcie_bar_io[0] + 0x08, data_read, 4, 4, NO_PRINT_VALUES);      
+						#if _DEBUG	
+							{	
+								printf("\n Got Dinterrupt[31..0]  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							}; 
+						#endif 		
+							
+						printf("-- ============================\n");
+						printf("--      Dout Walking ON/OFF    \n");
+						printf("-- ============================\n");
+						printf("\n\n");
+						
+						printf("-- ============================\n");
+						// walking 1
+						for(i = 0; i < 32; i++)
+						{
+							data_write[0] = 0xff-(0x01<<i);  	
+							data_write[1] = 0xff-(0x01<<(i-8));  	
+							data_write[2] = 0xff-(0x01<<(i-16));   	
+							data_write[3] = 0xff-(0x01<<(i-24));  		
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						
+			
+							data_write[4] = 0xff; 
+							data_write[5] = 0xff; 
+							data_write[6] = 0xff; 	
+							data_write[7] = 0xff; 
+							
+							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 4, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 5, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 6, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 7, NO_PRINT_VALUES); 
+					
+							usleep(2*100*1000);
+					
+							printf("--       Dout: %d OFF       \n",i);
+							
+							printf("\n Set Dout[31..0] = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_write[3]&0xff,data_write[2]&0xff,data_write[1]&0xff,data_write[0]&0xff); 
+							IORd(pcie_bar_io[0] + 0x00, data_read, 4, 1, NO_PRINT_VALUES);      
+							printf("\n Got Din[31..0]  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							expected_data[0]=0xff-data_write[0];
+							expected_data[1]=0xff-data_write[1];
+							expected_data[2]=0xff-data_write[2];
+							expected_data[3]=0xff-data_write[3];
+							/*
+							IORd(pcie_bar_io[0] + 0x04, data_read, 4, 1, NO_PRINT_VALUES);      
+							printf("\n Din[63..32] = 0x%2.2x.%2.2x.%2.2x.%2.2x\n",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							expected_data[4]=0xff-data_write[4];
+							expected_data[5]=0xff-data_write[5];
+							expected_data[6]=0xff-data_write[6];
+							expected_data[7]=0xff-data_write[7];
+							*/
+							if (data_read[0]!=expected_data[0]) printf("\n Error at byte 0: Expected: 0x%2.2x got: 0x%2.2x",expected_data[0]&0xff,data_read[0]&0xff); 
+							if (data_read[1]!=expected_data[1]) printf("\n Error at byte 1: Expected: 0x%2.2x got: 0x%2.2x",expected_data[1]&0xff,data_read[1]&0xff); 
+							if (data_read[2]!=expected_data[2]) printf("\n Error at byte 2: Expected: 0x%2.2x got: 0x%2.2x",expected_data[2]&0xff,data_read[2]&0xff); 
+							if (data_read[3]!=expected_data[3]) printf("\n Error at byte 3: Expected: 0x%2.2x got: 0x%2.2x",expected_data[3]&0xff,data_read[3]&0xff); 
+										
+							IORd(pcie_bar_io[0] + 0x28, data_read, 1, 1, NO_PRINT_VALUES);      
+							#if _DEBUG	
+							{	
+								printf("\n Status Register = 0x%2.2x\n",data_read[0]&0xff); 
+							}; 
+							#endif 	
+							if (data_read[0]==0x08) 
+								{
+									IORd(pcie_bar_io[0] + 0x08, data_read, 4, 4, NO_PRINT_VALUES);      
+									printf("\n Got Dinterrupt[31..0] rising edge = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+								}
+							else
+								printf("\n No Rising Edge Interrupt[31..0] Detected"); 
+								
+							
+							IORd(pcie_bar_io[0] + 0x28, data_read, 1, 1, NO_PRINT_VALUES);      
+							#if _DEBUG	
+							{	
+								printf("\n Status Register = 0x%2.2x\n",data_read[0]&0xff); 
+							}; 
+							#endif							
+											
+							printf("\n");
+							printf("-- ============================\n");
+						}
+						
+						printf("\n");
+						printf("-- ============================\n");
+						
+						// ISR and Interrupt register cleaning up
+						IORd(pcie_bar_io[0] + 0x28, data_read, 1, 1, NO_PRINT_VALUES);
+						#if _DEBUG	
+							{	
+								printf("\n Status Register = 0x%2.2x\n",data_read[0]&0xff); 
+							}; 
+						#endif   
+						IORd(pcie_bar_io[0] + 0x08, data_read, 4, 4, NO_PRINT_VALUES);      
+						#if _DEBUG	
+							{	
+								printf("\n Got Dinterrupt[31..0]  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							}; 
+						#endif 	
+						
+						// enable interrupt
+						data_write[0] = 0x00; 
+						
+						// enable interrupt falling edge
+						IOWr(pcie_bar_io[0] + 0x00, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x01, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x02, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x03, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x04, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x05, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x06, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x07, data_write, 1, 1, 0, NO_PRINT_VALUES);
+						
+						// walking 0
+						for(i = 0; i < 32; i++)
+						{
+							
+							data_write[0] = (0x01<<i);  	
+							data_write[1] = (0x01<<(i-8));  	
+							data_write[2] = (0x01<<(i-16));   	
+							data_write[3] = (0x01<<(i-24));  		
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						
+			
+							data_write[4] = 0x00; 
+							data_write[5] = 0x00;  
+							data_write[6] = 0x00; 	
+							data_write[7] = 0x00;  
+							
+							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 4, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 5, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 6, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 7, NO_PRINT_VALUES); 
+					
+							usleep(2*100*1000);
+					
+							//printf("\n");
+							//printf("-- ============================\n");
+							printf("--       Dout: %d ON       \n",i);
+							
+							printf("\n Set Dout[31..0] = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_write[3]&0xff,data_write[2]&0xff,data_write[1]&0xff,data_write[0]&0xff); 
+							IORd(pcie_bar_io[0] + 0x00, data_read, 4, 1, NO_PRINT_VALUES);      
+							printf("\n Got Din[31..0]  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							expected_data[0]=0xff-data_write[0];
+							expected_data[1]=0xff-data_write[1];
+							expected_data[2]=0xff-data_write[2];
+							expected_data[3]=0xff-data_write[3];
+							/*
+							IORd(pcie_bar_io[0] + 0x04, data_read, 4, 1, NO_PRINT_VALUES);      
+							printf("\n Din[63..32] = 0x%2.2x.%2.2x.%2.2x.%2.2x\n",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							expected_data[4]=0xff-data_write[4];
+							expected_data[5]=0xff-data_write[5];
+							expected_data[6]=0xff-data_write[6];
+							expected_data[7]=0xff-data_write[7];
+							*/
+							if (data_read[0]!=expected_data[0]) printf("\n Error at byte 0: Expected: 0x%2.2x got: 0x%2.2x",expected_data[0]&0xff,data_read[0]&0xff); 
+							if (data_read[1]!=expected_data[1]) printf("\n Error at byte 1: Expected: 0x%2.2x got: 0x%2.2x",expected_data[1]&0xff,data_read[1]&0xff); 
+							if (data_read[2]!=expected_data[2]) printf("\n Error at byte 2: Expected: 0x%2.2x got: 0x%2.2x",expected_data[2]&0xff,data_read[2]&0xff); 
+							if (data_read[3]!=expected_data[3]) printf("\n Error at byte 3: Expected: 0x%2.2x got: 0x%2.2x",expected_data[3]&0xff,data_read[3]&0xff); 
+							
+							IORd(pcie_bar_io[0] + 0x28, data_read, 1, 1, NO_PRINT_VALUES);      
+							#if _DEBUG	
+							{	
+								printf("\n Status Register = 0x%2.2x\n",data_read[0]&0xff); 
+							}; 
+							#endif 	
+							if (data_read[0]==0x08) 
+								{
+									IORd(pcie_bar_io[0] + 0x08, data_read, 4, 4, NO_PRINT_VALUES);      
+									printf("\n Got Dinterrupt[31..0] falling edge = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+								}
+							else
+								printf("\n No Falling Edge Interrupt[31..0] Detected"); 
+							
+							IORd(pcie_bar_io[0] + 0x28, data_read, 1, 1, NO_PRINT_VALUES);      
+							#if _DEBUG	
+							{	
+								printf("\n Status Register = 0x%2.2x\n",data_read[0]&0xff); 
+							}; 
+							#endif								
+							
+							printf("\n");
+							printf("-- ============================\n");
+								
+														
+						}
+						
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}  	
+				
+				case 72 : 
+					{
+						// disable debounce
+						data_write[0] = 0x00; 
+						data_write[1] = 0x00;  
+						data_write[2] = 0x00; 	
+						data_write[3] = 0x00;  
+							
+						IOWr(pcie_bar_io[0] + 0x3C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3D, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3E, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3F, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x40, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x41, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x42, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x43, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+							
+							
+						printf("-- ============================\n");
+						printf("--          Dout All ON        \n");
+						printf("-- ============================\n");
+						printf("\n\n");
+						
+						printf("-- ============================\n");
+						// all FF
+						
+							data_write[0] = 0xff;  	
+							data_write[1] = 0xff;  	
+							data_write[2] = 0xff;   	
+							data_write[3] = 0xff;  		
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						
+			
+							data_write[4] = 0xff; 
+							data_write[5] = 0xff; 
+							data_write[6] = 0xff; 	
+							data_write[7] = 0xff; 
+							
+							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 4, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 5, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 6, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 7, NO_PRINT_VALUES); 
+					
+							usleep(4*1000*1000);
+					
+							
+							data_write[0] = 0x00;  	
+							data_write[1] = 0x00;  	
+							data_write[2] = 0x00;   	
+							data_write[3] = 0x00;  		
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						
+			
+							data_write[4] = 0x00; 
+							data_write[5] = 0x00;  
+							data_write[6] = 0x00; 	
+							data_write[7] = 0x00;  
+							
+							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 4, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 5, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 6, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 7, NO_PRINT_VALUES); 
+					
+							usleep(4*1000*1000);
+					
+							printf("\n");
+							printf("-- ============================\n");
+								
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}  	
+				
+				case 73 : 
+					{
+						// disable debounce
+						data_write[0] = 0x00; 
+						data_write[1] = 0x00;  
+						data_write[2] = 0x00; 	
+						data_write[3] = 0x00;  
+							
+						IOWr(pcie_bar_io[0] + 0x3C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3D, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3E, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3F, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x40, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x41, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x42, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x43, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+							
+						printf(" Select Dout[0..7] value ? : 0x");
+						if ((ret_code=scanf("%2hhx", &data_read[0]))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};	
+						printf(" Select Dout[8..15] value ? : 0x");
+						if ((ret_code=scanf("%2hhx", &data_read[1]))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};	
+						printf(" Select Dout[15..23] value ? : 0x");
+						if ((ret_code=scanf("%2hhx", &data_read[2]))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+						printf(" Select Dout[24..31] value ? : 0x");
+						if ((ret_code=scanf("%2hhx", &data_read[3]))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+						printf("-- ============================\n");
+						printf("--          Dout Set           \n");
+						printf("-- ============================\n");
+						printf("\n\n");
+						
+						printf("-- ============================\n");
+						// all FF
+						
+							data_write[0] = data_read[0];//0xff;  	
+							data_write[1] = data_read[1];//0xff;  	
+							data_write[2] = data_read[2];//0xff;   	
+							data_write[3] = data_read[3];//0xff;  		
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+			/*
+							data_write[4] = data_read[0];//0xff; 
+							data_write[5] = data_read[1];//0xff; 
+							data_write[6] = data_read[2];//0xff; 	
+							data_write[7] = data_read[3];//0xff; 
+							
+							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 4, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 5, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 6, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 7, NO_PRINT_VALUES); 
+				*/	
+										
+							printf("\n");
+							printf("-- ============================\n");
+								
+							usleep(500*1000);
+						printf("--     Check Feedback:        \n");
+							
+						//printf("\n Set Dout[31..0] = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_write[3]&0xff,data_write[2]&0xff,data_write[1]&0xff,data_write[0]&0xff); 
+						IORd(pcie_bar_io[0] + 0x18, data_read, 4, 1, NO_PRINT_VALUES);    
+						printf("\n Got Fb[31..0]  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							/*
+							expected_data[0]=0xff-data_write[0];
+							expected_data[1]=0xff-data_write[1];
+							expected_data[2]=0xff-data_write[2];
+							expected_data[3]=0xff-data_write[3];*/
+							
+						IORd(pcie_bar_io[0] + 0x1C, data_read, 4, 1, NO_PRINT_VALUES);      
+						printf("\n Got Fb[63..32] = 0x%2.2x.%2.2x.%2.2x.%2.2x\n",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							/*
+							expected_data[4]=0xff-data_write[4];
+							expected_data[5]=0xff-data_write[5];
+							expected_data[6]=0xff-data_write[6];
+							expected_data[7]=0xff-data_write[7];
+							
+							if (data_read[0]!=expected_data[0]) printf("\n Error at byte 0: Expected: 0x%2.2x got: 0x%2.2x",expected_data[0]&0xff,data_read[0]&0xff); 
+							if (data_read[1]!=expected_data[1]) printf("\n Error at byte 1: Expected: 0x%2.2x got: 0x%2.2x",expected_data[1]&0xff,data_read[1]&0xff); 
+							if (data_read[2]!=expected_data[2]) printf("\n Error at byte 2: Expected: 0x%2.2x got: 0x%2.2x",expected_data[2]&0xff,data_read[2]&0xff); 
+							if (data_read[3]!=expected_data[3]) printf("\n Error at byte 3: Expected: 0x%2.2x got: 0x%2.2x",expected_data[3]&0xff,data_read[3]&0xff); 
+								*/
+						wait_to_continue();
+						break;
+						return 0;
+					}  
+					
+					
+				case 74 : 
+					{	
+						// disable debounce
+						data_write[0] = 0x00; 
+						data_write[1] = 0x00;  
+						data_write[2] = 0x00; 	
+						data_write[3] = 0x00;  
+							
+						IOWr(pcie_bar_io[0] + 0x3C, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3D, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3E, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3F, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x40, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x41, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x42, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x43, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+							
+						printf(" Select Dout[0..7] value ? : 0x");
+						if ((ret_code=scanf("%2hhx", &data_read[0]))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};	
+						printf(" Select Dout[8..15] value ? : 0x");
+						if ((ret_code=scanf("%2hhx", &data_read[1]))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};	
+						printf(" Select Dout[15..23] value ? : 0x");
+						if ((ret_code=scanf("%2hhx", &data_read[2]))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+						printf(" Select Dout[24..31] value ? : 0x");
+						if ((ret_code=scanf("%2hhx", &data_read[3]))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+						printf("-- ============================\n");
+						printf("--          Dout Set           \n");
+						printf("-- ============================\n");
+						printf("\n\n");
+						
+						printf("-- ============================\n");
+						// all FF
+						// walking 1
+						
+							data_write[0] = data_read[0];//0xff;  	
+							data_write[1] = data_read[1];//0xff;  	
+							data_write[2] = data_read[2];//0xff;   	
+							data_write[3] = data_read[3];//0xff;  		
+							IOWr(pcie_bar_io[0] + 0x18, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x19, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						
+			
+							/*data_write[4] = data_read[0];//0xff; 
+							data_write[5] = data_read[1];//0xff; 
+							data_write[6] = data_read[2];//0xff; 	
+							data_write[7] = data_read[3];//0xff; 
+							
+							IOWr(pcie_bar_io[0] + 0x1C, data_write, 1, 1, 4, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1D, data_write, 1, 1, 5, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1E, data_write, 1, 1, 6, NO_PRINT_VALUES); 
+							IOWr(pcie_bar_io[0] + 0x1F, data_write, 1, 1, 7, NO_PRINT_VALUES); 
+					*/
+										
+							printf("\n");
+							printf("-- ============================\n");
+								
+							usleep(500*1000);
+						
+						printf("-- ============================\n");
+						printf("--       Get DIN status        \n");	
+						printf("-- ============================\n");
+						
+						IORd(pcie_bar_io[0] + 0x00, data_read, 4, 1, NO_PRINT_VALUES);      
+						printf("\n Din[31..0]  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+						IORd(pcie_bar_io[0] + 0x04, data_read, 4, 1, NO_PRINT_VALUES);      
+						printf("\n Din[63..32] = 0x%2.2x.%2.2x.%2.2x.%2.2x\n",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}  	
+	
+				case 75 : 
+					{
+						
+						printf("-- ============================\n");
+						printf("--       Check Feedback        \n");	
+						printf("-- ============================\n");
+						/*
+						IORd(pcie_bar_io[0] + 0x00, data_read, 4, 1, NO_PRINT_VALUES);      
+						printf("\n Din[31..0]  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+						IORd(pcie_bar_io[0] + 0x04, data_read, 4, 1, NO_PRINT_VALUES);      
+						printf("\n Din[63..32] = 0x%2.2x.%2.2x.%2.2x.%2.2x\n",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+						*/
+						//printf("--     Check Feedback:        \n");
+							
+						IORd(pcie_bar_io[0] + 0x18, data_read, 4, 1, NO_PRINT_VALUES);    
+						printf("\n Got Fb[31..0]  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							
+						IORd(pcie_bar_io[0] + 0x1C, data_read, 4, 1, NO_PRINT_VALUES);      
+						printf("\n Got Fb[63..32] = 0x%2.2x.%2.2x.%2.2x.%2.2x\n",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}  	
+	
 					
 					
 				case 99 : 
@@ -3285,3 +4489,5 @@ int main(int argc, char **argv)
 }
 
 
+
+			
