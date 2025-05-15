@@ -1645,19 +1645,12 @@ int main(int argc, char **argv)
 		uint32_t nbanks;
 		uint32_t chipsize;
 		uint32_t sramtype;
-		uint32_t rd_latency;
-		uint32_t wr_latency;
 		
-		
-		// qli variable
-		uint8_t	qli_cfg[8];
 		// io variable
 		uint32_t fb_width;
 		uint32_t dout_type;
 		uint8_t fb_mask;
 		uint8_t dout_cfg;
-		uint8_t Hw_ID;
-		uint8_t Sp_ID;
 		// com_port
 		uint8_t cctalk1_ena;
 		uint8_t cctalk1_pu;
@@ -1721,31 +1714,53 @@ int main(int argc, char **argv)
 		printf("====================================\n"); 
 		printf("\n"); 
 		
+		typedef struct {
+			uint32_t id_31_0;    
+			uint32_t id_63_32;
+			uint32_t id_95_64;
+			uint32_t id_127_96;  
+		} UniqueID;
+		
+		const UniqueID expected_keys[2]= {
+		
+			{// Chiave 1
+				.id_31_0 	= 0x3402a04a,
+				.id_63_32 	= 0x21b82430,
+				.id_95_64 	= 0x04503d7f,
+				.id_127_96 = 0x11eab905
+			 },
+			
+			{// Chiave 2
+				.id_31_0 	= 0xf8001262,
+				.id_63_32 	= 0xedba961a,
+				.id_95_64 	= 0x0c503d7f,
+				.id_127_96 = 0x19eab905
+			}
+		};
+		
 		MRd32(mem_ctrl + 0xD0, data_read, 4, 1, NO_PRINT_VALUES); 
-		uint32_t expected_id_31_0 	= 0x3402a04a;
-		uint32_t expected_id_63_32 	= 0x21b82430;
-		uint32_t expected_id_95_64 	= 0x04503d7f;
-		uint32_t expected_id_127_96 = 0x11eab905;
+		
 		printf("\n ===      Unique ID key      ===");
 		printf("\n =====    ID31..0: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 	
 		// 
-		uint32_t id_31_0 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
-		(id_31_0 != expected_id_31_0) ? printf(" ERRORE ") : printf(" OK ") ;  
+		UniqueID read_id;
+		read_id.id_31_0 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
+		(read_id.id_31_0 != expected_keys[0].id_31_0) ? printf(" ERRORE ") : printf(" OK ") ;  
 		MRd32(mem_ctrl + 0xD4, data_read, 4, 1, NO_PRINT_VALUES);         
 		printf("\n =====    ID63..32: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 					
 		// 
-		uint32_t id_63_32 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
-		(id_63_32 != expected_id_63_32) ? printf(" ERRORE ") : printf(" OK ") ; 
+		read_id.id_63_32 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
+		(read_id.id_63_32 != expected_keys[0].id_63_32) ? printf(" ERRORE ") : printf(" OK ") ; 
 		MRd32(mem_ctrl + 0xD8, data_read, 4, 1, NO_PRINT_VALUES); 
 		printf("\n =====    ID95..64: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 					
 		// 
-		uint32_t id_95_64 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
-		(id_95_64 != expected_id_95_64) ? printf(" ERRORE ") : printf(" OK ") ; 
+		read_id.id_95_64 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
+		(read_id.id_95_64 != expected_keys[0].id_95_64) ? printf(" ERRORE ") : printf(" OK ") ; 
 		MRd32(mem_ctrl + 0xDC, data_read, 4, 1, NO_PRINT_VALUES); 
 		printf("\n =====    ID127..96: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 					
 		// 
-		uint32_t id_127_96 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
-		(id_127_96 != expected_id_127_96) ? printf(" ERRORE \n\n") : printf(" OK \n\n") ; 
+		read_id.id_127_96 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
+		(read_id.id_127_96 != expected_keys[0].id_127_96) ? printf(" ERRORE \n\n") : printf(" OK \n\n") ; 
 	
 		//IORd(pcie_bar_mem[1] + 0x14, data_read, 2, 1, NO_PRINT_VALUES); 
 		printf("type 0 to exit \n");
