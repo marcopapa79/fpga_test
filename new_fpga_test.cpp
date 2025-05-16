@@ -1714,6 +1714,8 @@ int main(int argc, char **argv)
 		printf("====================================\n"); 
 		printf("\n"); 
 		
+		#define MAX_KEYS 2
+		
 		typedef struct {
 			uint32_t id_31_0;    
 			uint32_t id_63_32;
@@ -1721,7 +1723,8 @@ int main(int argc, char **argv)
 			uint32_t id_127_96;  
 		} UniqueID;
 		
-		const UniqueID expected_keys[2]= {
+		
+		const UniqueID expected_keys[MAX_KEYS]= {
 		
 			{// Chiave 1
 				.id_31_0 	= 0x3402a04a,
@@ -1736,32 +1739,57 @@ int main(int argc, char **argv)
 				.id_95_64 	= 0x0c503d7f,
 				.id_127_96 = 0x19eab905
 			}
+			
 		};
 		
 		MRd32(mem_ctrl + 0xD0, data_read, 4, 1, NO_PRINT_VALUES); 
 		
-		printf("\n ===      Unique ID key      ===");
-		printf("\n =====    ID31..0: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 	
-		// 
 		UniqueID read_id;
+		printf("\n ===      Unique ID key      ===");
+		// 
+		printf("\n =====    ID31..0: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 	
 		read_id.id_31_0 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
-		(read_id.id_31_0 != expected_keys[0].id_31_0) ? printf(" ERRORE ") : printf(" OK ") ;  
+		
+		uint32_t vld_id_31_0 = 0;
+		for (int i = 0; i < MAX_KEYS; i++) {
+			(read_id.id_31_0 != expected_keys[i].id_31_0) ?  : vld_id_31_0++ ;  
+		}	
+		vld_id_31_0 == 0 ? printf(" ERRORE ") : printf(" OK Chiave Board N° %d",vld_id_31_0+1) ; 
+		
+		// 
 		MRd32(mem_ctrl + 0xD4, data_read, 4, 1, NO_PRINT_VALUES);         
 		printf("\n =====    ID63..32: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 					
-		// 
 		read_id.id_63_32 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
-		(read_id.id_63_32 != expected_keys[0].id_63_32) ? printf(" ERRORE ") : printf(" OK ") ; 
+		
+		uint32_t vld_id_63_32 = 0;
+		for (int i = 0; i < MAX_KEYS; i++) {
+			(read_id.id_63_32 != expected_keys[i].id_63_32) ?  : vld_id_63_32++ ;  
+		}	
+		vld_id_63_32 == 0 ? printf(" ERRORE ") : printf(" OK Chiave Board N° %d",vld_id_63_32+1) ; 
+		
+		// 
 		MRd32(mem_ctrl + 0xD8, data_read, 4, 1, NO_PRINT_VALUES); 
 		printf("\n =====    ID95..64: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 					
-		// 
 		read_id.id_95_64 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
-		(read_id.id_95_64 != expected_keys[0].id_95_64) ? printf(" ERRORE ") : printf(" OK ") ; 
+		
+		uint32_t vld_id_95_64 = 0;
+		for (int i = 0; i < MAX_KEYS; i++) {
+			(read_id.id_95_64 != expected_keys[i].id_95_64) ?  : vld_id_95_64++;  
+		}	
+		vld_id_95_64 == 0 ? printf(" ERRORE ") : printf(" OK Chiave Board N° %d",vld_id_95_64+1) ; 
+		
+		// 
 		MRd32(mem_ctrl + 0xDC, data_read, 4, 1, NO_PRINT_VALUES); 
 		printf("\n =====    ID127..96: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 					
-		// 
 		read_id.id_127_96 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
-		(read_id.id_127_96 != expected_keys[0].id_127_96) ? printf(" ERRORE \n\n") : printf(" OK \n\n") ; 
-	
+		
+		uint32_t vld_id_127_96 = 0;
+		for (int i = 0; i < MAX_KEYS; i++) {
+			(read_id.id_127_96 != expected_keys[i].id_127_96) ?  : vld_id_127_96++;  
+		}	
+		vld_id_127_96 == 0 ? printf(" ERRORE ") : printf(" OK Chiave Board N° %d\n",vld_id_127_96+1) ; 
+		
+		
 		//IORd(pcie_bar_mem[1] + 0x14, data_read, 2, 1, NO_PRINT_VALUES); 
 		printf("type 0 to exit \n");
 		
