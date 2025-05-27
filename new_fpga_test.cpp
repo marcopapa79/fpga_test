@@ -221,6 +221,10 @@ uint32_t sizeSecsBuffer = 32*16;
 #define KEY_17th(x)  ((x) == 0?"KEY17_th_feature not supported":"KEY17_th_feature supported")
 #define MASTER_KEY(x)((x) == 0?"Master Key Feature not supported":"Master Key Feature supported")
 #define MASTER_KEY_FROM_LP(x)((x) == 1?"MASTER KEY FLAG ASSERTED":"MASTER KEY FLAG DEASSERTED")
+#define USER(x)      ((x) == 0?"not user mode":"user mode")
+#define BIOS(x)      ((x) == 0?"BIOS didn't wrote enc aes keys":"BIOS wrote enc aes keys")
+#define M_KEY_RDY(x) ((x) == 0?"LP mast key not ready":"LP mast key ready")
+#define EXP17THKEY(x)((x) == 0?"17th key not expanded":"17th key expanded")
 
 
 #define ENABLE_ATS(x)((x) == 1?"ATS_ENABLED":"ATS_DISABLED")
@@ -1551,6 +1555,23 @@ int main(int argc, char **argv)
 	uint32_t system_return;
 	char path [1024]="sudo ./../git/libsecuress/bin/x64/test-libsecs -enc -k 0   -i ./../git/libsecuress/bin/x64/original_key    -o ./../git/libsecuress/bin/x64/key_enc  > /dev/null";
 	
+	sprintf (path, "sudo insmod ./../git/drvsecuress/linux/qxtsecs.ko");
+	system_return = system(path);
+	
+	if (system_return != 0)
+		{
+			printf("system error path %s",path);	
+		}
+	sprintf (path, "sudo chmod 666 /dev/secS");
+	system_return = system(path);	
+	if (system_return != 0)
+		{
+			printf("system error path %s",path);	
+		}		
+	struct stat stat_file;
+	if (stat("/dev/secS",&stat_file)!=1) printf("\n==========================\n/dev/secS not found\n You cannot use AES functionality\n==========================\n");	
+	
+	
 	sprintf (path, "sudo setpci -d 19d4: 04.b=07");	
 	system_return = system(path);
 	sprintf (path, "sudo setpci -d 1204: 04.b=07");	
@@ -1616,7 +1637,16 @@ int main(int argc, char **argv)
 	printf("\n ===  SECS MODULE (HW parameters) ===");
 	printf("\n =====      Version %2.2x.%2.2x       =====\n\n",data_read[0]&0xff,data_read[1]&0xff); 	
 	printf("\n ====================================");
+	MRd32(mem_ctrl + 0x3F, data_read, 1, 1, NO_PRINT_VALUES);   
+	printf("\n CAPABILITIES \t= %2.2x", data_read[0]&0xff);	
 	
+	printf("\n KEY17th feature \t= %s", KEY_17th((data_read[0]>>3)&0x01));
+	printf("\n Master KEY feature \t= %s", MASTER_KEY((data_read[0]>>4)&0x01));
+	MRd32(mem_ctrl + 0xBE, data_read, 1, 1, 1);//NO_PRINT_VALUES);//NO_PRINT_VALUES);
+	printf("\n User Mode    \t= %s", USER(data_read[0]&0x01));
+	printf("\n BIOS_Key written    \t= %s", BIOS((data_read[0]>>1)&0x01));
+	printf("\n LP master key ready \t= %s", M_KEY_RDY((data_read[0]>>2)&0x01));
+	printf("\n expanded 17th key \t= %s", EXP17THKEY((data_read[0]>>3)&0x01));
 	
 	 /* ======================================
 		======================================
@@ -1696,7 +1726,14 @@ int main(int argc, char **argv)
 		printf("Cmd_26: Chip Erase (FPGA FLASH) \n");
 		printf("Cmd_27: Sector Erase (FPGA FLASH) \n");	
 		printf("Cmd_39: Write SR protection disable ALL (FPGA FLASH) \n");
-		printf("=============== SRAM TEST ==================\n");
+		printf("=============== SRAM TEST ==================\n");		
+		printf("Cmd_40: Program AES encrypted Keys into internal keys memory (4096 bits)\n");	
+		printf("Cmd_41: Verify Key0..15 with open SSL\n");	
+		printf("Cmd_42: Encrypt AES Keys with 17th key and write in FPGA FLASH sector 1023 0x3FF000\n");	
+		printf("Cmd_43: Test_Analyzer\n");	
+		printf("Cmd_44: Encrypt AES Keys with Master key and write in FPGA FLASH sector 1023 0x3FF000\n");
+		printf("Cmd_45: AES reset\n");
+		printf("Cmd_46: Program Master Key injection\n");
 		printf("Cmd_60: SRAM Write Test from 0 to MAX size in Normal mode (stress test for consumption)\n");
 		printf("Cmd_61: SRAM Write Test from 0 to MAX size in Mirror mode (stress test for consumption)\n");
 		printf("Cmd_62: SRAM Write Test and Read back/verify from 0 to MAX size in Normal mode 64\n");
