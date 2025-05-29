@@ -1346,7 +1346,6 @@ int main(int argc, char **argv)
 	find_pci_reg(TEST_DEVID,	pcie_bar_test,	pcie_bar_size_test,	PRINT_VALUES);
 	//==========================================
 
-	uint32_t nvramSize = 16384;//pcie_bar_size_test[0];//16384;
 	uint32_t nvramMaxSize = pcie_bar_size_mem[0];//262144;
 	uint32_t aesMaxSize = pcie_bar_size_mem[2];//262144;
 
@@ -1355,23 +1354,23 @@ int main(int argc, char **argv)
 	if (fd != -1) {
 		uint8_t * mem_addr;	
 		uint8_t * mem_addr_led;		
-		uint8_t * mem_addr_secs;		
+		//uint8_t * mem_addr_secs;		
 		uint8_t * mem_addr_sbc;			
 		uint8_t * mem_addr_ats;			
-		uint8_t * mem_addr_test;	
+		//uint8_t * mem_addr_test;	
 		uint8_t * mem_ctrl;			
 		uint8_t * mem_aes;		
 		
 		mem_addr = (uint8_t*)mmap(0, nvramMaxSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_mem[0]);
 		mem_ctrl = (uint8_t*)mmap(0, 256, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_mem[1]);
-		mem_aes = (uint8_t*)mmap(0, 256, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_mem[2]);
+		mem_aes = (uint8_t*)mmap(0, aesMaxSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_mem[2]);
 		/*mem_addr_led = (uint8_t*)mmap(0, nvramSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_qli[0]);
 		mem_addr_sbc = (uint8_t*)mmap(0, nvramSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_sbc[0]);
 		*/
 		
-		mem_addr_secs = (uint8_t*)mmap(0, nvramSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_secs[0]);
+		//mem_addr_secs = (uint8_t*)mmap(0, nvramSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_secs[0]);
 		//mem_addr_ats = (uint8_t*)mmap(0, nvramSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_ats[0]);
-		mem_addr_test = (uint8_t*)mmap(0, nvramSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_test[0]);
+		//mem_addr_test = (uint8_t*)mmap(0, nvramSize, PROT_READ|PROT_WRITE, MAP_SHARED, fd, pcie_bar_test[0]);
 	
 		
 		uint8_t *data_read  = (uint8_t *)calloc (256,sizeof(uint8_t));
@@ -1379,7 +1378,7 @@ int main(int argc, char **argv)
 		uint8_t *expected_data = (uint8_t *)calloc (256,sizeof(uint8_t));
 		uint8_t *fpga_wdata = (uint8_t *)malloc(mem_size);
 		uint8_t *fpga_rdata = (uint8_t *)malloc(mem_size);
-		uint8_t trace_id[8];
+		uint8_t uni17key[16];
 		uint8_t expanded_key[16];
 		uint8_t *key_p  	= (uint8_t *)calloc (sizeSecsBuffer,sizeof(uint8_t));
 		
@@ -1558,22 +1557,6 @@ int main(int argc, char **argv)
 	uint32_t system_return;
 	char path [1024]="sudo ./../git/libsecuress/bin/x64/test-libsecs -enc -k 0   -i ./../git/libsecuress/bin/x64/original_key    -o ./../git/libsecuress/bin/x64/key_enc  > /dev/null";
 	
-	//sprintf (path, "sudo insmod ./../git/drvsecuress/linux/qxtsecs.ko");
-	//system_return = system(path);
-	
-	//if (system_return != 0)
-	//	{
-	//		printf("system error path %s",path);	
-	//	}
-	//sprintf (path, "sudo chmod 666 /dev/secS");
-	//system_return = system(path);	
-	//if (system_return != 0)
-	//	{
-	//		printf("system error path %s",path);	
-	//	}		
-	//struct stat stat_file;
-	//if (stat("/dev/secS",&stat_file)!=1) printf("\n==========================\n/dev/secS not found\n You cannot use AES functionality\n==========================\n");	
-	
 	
 	sprintf (path, "sudo setpci -d 19d4: 04.b=07");	
 	system_return = system(path);
@@ -1595,6 +1578,8 @@ int main(int argc, char **argv)
 	printf("\n =====      Version %2.2x.%2.2x      =====",data_read[0]&0xff,data_read[1]&0xff); 
 	
 	
+	printf("\n ====================================");
+	printf("\n ===       Platform Version       ===");
 	IORd(pcie_bar_io[0] + 0x24, data_read, 2, 1, NO_PRINT_VALUES);
 	printf("\n PLATFORM ID \t= %2.2x\n PLATFORM SP ID\t= %2.2x", data_read[0]&0xff,data_read[1]&0xff);	
 	IORd(pcie_bar_io[0] + 0x27, data_read, 1, 1, NO_PRINT_VALUES);
@@ -1619,11 +1604,7 @@ int main(int argc, char **argv)
 	printf("\n ====================================");
 	printf("\n === NVRAM MODULE (HW parameters) ===");
 	printf("\n =====      Version %2.2x.%2.2x       =====\n\n",data_read[0]&0xff,data_read[1]&0xff); 
-/*	MRd32(mem_ctrl + 0x3C, data_read, 2, 1, NO_PRINT_VALUES); 
-	printf("\n ====================================");
-	printf("\n ===       Platform Version       ===");
-	printf("\n =====      Version %2.2x.%2.2x       =====\n\n\n\n",data_read[0]&0xff,data_read[1]&0xff); 
-	*/					
+					
 	MRd32(mem_ctrl + 0x36, data_read, 1, 1, NO_PRINT_VALUES);   
 	printf("\n\n === Chip Number/Size  ==="); 
 	printf("\n Number of Chip = %d", (pot2(data_read[0]>>4&0x03)));				
@@ -1756,7 +1737,7 @@ int main(int argc, char **argv)
 		printf("====================================\n"); 
 		printf("\n"); 
 		
-		#define MAX_KEYS 2
+		#define MAX_KEYS 4
 		
 		typedef struct {
 			uint32_t id_31_0;    
@@ -1769,77 +1750,112 @@ int main(int argc, char **argv)
 		const UniqueID expected_keys[MAX_KEYS]= {
 		
 			{// Chiave 1
-				.id_31_0 	= 0x3402a04a,
+				.id_31_0 	= 0x3402a048,
 				.id_63_32 	= 0x21b82430,
 				.id_95_64 	= 0x04503d7f,
 				.id_127_96 = 0x11eab905
 			 },
 			
 			{// Chiave 2
-				.id_31_0 	= 0xf8001262,
+				.id_31_0 	= 0xf8001260,
 				.id_63_32 	= 0xedba961a,
+				.id_95_64 	= 0x0c503d7f,
+				.id_127_96 = 0x19eab905
+			},
+			
+	 		{// Chiave 3
+				.id_31_0 	= 0x7402b05f,
+				.id_63_32 	= 0x61b83425,
+				.id_95_64 	= 0x04503f7f,
+				.id_127_96  = 0x11eabb05
+			},
+			
+			{// Chiave 4
+				.id_31_0 	= 0xf8003060,
+				.id_63_32 	= 0xedbab41a,
 				.id_95_64 	= 0x0c503d7f,
 				.id_127_96 = 0x19eab905
 			}
 			
-	/* 		{// Chiave 3
-				.id_31_0 	= 0x00040002,
-				.id_63_32 	= 0x15be847a,
-				.id_95_64 	= 0x00040000,
-				.id_127_96  = 0x15be847a
-			}
-			 */
-			
 		};
 		
-		MRd32(mem_ctrl + 0xD0, data_read, 4, 1, NO_PRINT_VALUES); 
-		
 		UniqueID read_id;
-		printf("\n ===      Unique ID key      ===");
-		// 
-		printf("\n =====    ID31..0: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 	
+		uint32_t vld_id = 0;
+		
+		MRd32(mem_ctrl + 0xD0, data_read, 4, 1, NO_PRINT_VALUES); 
+		uni17key[0]=data_read[0];
+		uni17key[1]=data_read[1];
+		uni17key[2]=data_read[2];
+		uni17key[3]=data_read[3];
+		
 		read_id.id_31_0 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
 		
-		uint32_t vld_id_31_0 = 0;
-		for (int i = 0; i < MAX_KEYS; i++) {
-			(read_id.id_31_0 != expected_keys[i].id_31_0) ?  : vld_id_31_0++ ;  
-		}	
-		vld_id_31_0 == 0 ? printf(" ERRORE ") : printf(" OK Chiave Board N° %d",vld_id_31_0+1) ; 
+		MRd32(mem_ctrl + 0xD4, data_read, 4, 1, NO_PRINT_VALUES); 
+		uni17key[4]=data_read[0];
+		uni17key[5]=data_read[1];
+		uni17key[6]=data_read[2];
+		uni17key[7]=data_read[3];        
 		
-		// 
-		MRd32(mem_ctrl + 0xD4, data_read, 4, 1, NO_PRINT_VALUES);         
-		printf("\n =====    ID63..32: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 					
 		read_id.id_63_32 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
 		
-		uint32_t vld_id_63_32 = 0;
-		for (int i = 0; i < MAX_KEYS; i++) {
-			(read_id.id_63_32 != expected_keys[i].id_63_32) ?  : vld_id_63_32++ ;  
-		}	
-		vld_id_63_32 == 0 ? printf(" ERRORE ") : printf(" OK Chiave Board N° %d",vld_id_63_32+1) ; 
 		
-		// 
 		MRd32(mem_ctrl + 0xD8, data_read, 4, 1, NO_PRINT_VALUES); 
-		printf("\n =====    ID95..64: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 					
+		uni17key[8]=data_read[0];
+		uni17key[9]=data_read[1];
+		uni17key[10]=data_read[2];
+		uni17key[11]=data_read[3];  
+		
 		read_id.id_95_64 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
 		
-		uint32_t vld_id_95_64 = 0;
-		for (int i = 0; i < MAX_KEYS; i++) {
-			(read_id.id_95_64 != expected_keys[i].id_95_64) ?  : vld_id_95_64++;  
-		}	
-		vld_id_95_64 == 0 ? printf(" ERRORE ") : printf(" OK Chiave Board N° %d",vld_id_95_64+1) ; 
-		
-		// 
 		MRd32(mem_ctrl + 0xDC, data_read, 4, 1, NO_PRINT_VALUES); 
-		printf("\n =====    ID127..96: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 					
-		read_id.id_127_96 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
+		uni17key[12]=data_read[0];
+		uni17key[13]=data_read[1];
+		uni17key[14]=data_read[2];
+		uni17key[15]=data_read[3];	
 		
-		uint32_t vld_id_127_96 = 0;
+		read_id.id_127_96 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);  
+		
+		printf("\n ===      Unique ID key      ===");
+		// 
+		printf("\n =====    ID31..0: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",uni17key[3]&0xff,uni17key[2]&0xff,uni17key[1]&0xff,uni17key[0]&0xff); 	
+		printf("\n =====    ID63..32: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",uni17key[7]&0xff,uni17key[6]&0xff,uni17key[5]&0xff,uni17key[4]&0xff); 	
+		printf("\n =====    ID95..64: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",uni17key[11]&0xff,uni17key[10]&0xff,uni17key[9]&0xff,uni17key[8]&0xff); 		
+		printf("\n =====    ID127..96: 0x%2.2x%2.2x%2.2x%2.2x      =====\t",uni17key[15]&0xff,uni17key[14]&0xff,uni17key[13]&0xff,uni17key[12]&0xff); 	
+		
+		
 		for (int i = 0; i < MAX_KEYS; i++) {
-			(read_id.id_127_96 != expected_keys[i].id_127_96) ?  : vld_id_127_96++;  
+			( (read_id.id_31_0 == expected_keys[i].id_31_0) & (read_id.id_63_32 == expected_keys[i].id_63_32) & (read_id.id_95_64 == expected_keys[i].id_95_64) & (read_id.id_127_96 == expected_keys[i].id_127_96)  ) ?  vld_id=i : vld_id;  
 		}	
-		vld_id_127_96 == 0 ? printf(" ERRORE ") : printf(" OK Chiave Board N° %d\n",vld_id_127_96+1) ; 
+		
+		vld_id == 0 ? printf("\n\n ERRORE \n\n") : printf(" \n\n SUCCESS"); printf(" Chiave Board N° %d\n\n",++vld_id) ; 
 		
 		
+						printf("\n ======================================= \t");
+						printf("\n == Master Key INJECTED to LP =="); 
+						MRd32(mem_ctrl + 0xCC, data_read, 4, 1, NO_PRINT_VALUES);
+						printf("\n Key 127..0:\t 0x%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+						MRd32(mem_ctrl + 0xC8, data_read, 4, 1, NO_PRINT_VALUES);
+						printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);  
+						MRd32(mem_ctrl + 0xC4, data_read, 4, 1, NO_PRINT_VALUES);
+						printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
+						MRd32(mem_ctrl + 0xC0, data_read, 4, 1, NO_PRINT_VALUES);
+						printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
+						printf("\n ======================================= \t\n");						
+						
+		
+						printf("\n ======================================= \t");
+						printf("\n == MAster Key original =="); 
+						MRd32(mem_ctrl + 0x6C, data_read, 4, 1, NO_PRINT_VALUES);
+						printf("\n Key 127..0:\t 0x%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+						MRd32(mem_ctrl + 0x68, data_read, 4, 1, NO_PRINT_VALUES);
+						printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);  
+						MRd32(mem_ctrl + 0x64, data_read, 4, 1, NO_PRINT_VALUES);
+						printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
+						MRd32(mem_ctrl + 0x60, data_read, 4, 1, NO_PRINT_VALUES);
+						printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
+						printf("\n ======================================= \t\n");
+						
+		printf("\n\n\n");
 		//IORd(pcie_bar_mem[1] + 0x14, data_read, 2, 1, NO_PRINT_VALUES); 
 		printf("type 0 to exit \n");
 		
@@ -2524,18 +2540,18 @@ int main(int argc, char **argv)
 						MRd32(mem_ctrl + 0x3C, data_read, 2, 1, NO_PRINT_VALUES); 
 						printf("\n ====================================");
 						printf("\n ===       Platform Version       ===");
-						printf("\n =====      Version %2.2x.%2.2x       =====\n\n\n\n",data_read[0]&0xff,data_read[1]&0xff); 
+						printf("\n =====      Version %2.2x.%2.2x       =====",data_read[0]&0xff,data_read[1]&0xff); 
 						
 						MRd32(mem_ctrl + 0x36, data_read, 1, 1, NO_PRINT_VALUES);   
 						printf("\n\n === Chip Number  ==="); 
 						printf("\n Number of Chip = %d", (pot2(data_read[0]>>4&0x03)));						
 							if ( ((data_read[0])&0x0F)==0 )
 							{
-								printf("\n Chip Size \t= 0 Mbit\n");	
+								printf("\n Chip Size \t= 0 Mbit\n\n\n");	
 							} 
 							else
 							{
-								printf("\n Chip Size \t= %.0lf Mbit\n", pow(2, ((data_read[0]&0x0F)+3) ));
+								printf("\n Chip Size \t= %.0lf Mbit\n\n\n", pow(2, ((data_read[0]&0x0F)+3) ));
 							} 
 													
 						
@@ -3863,6 +3879,21 @@ int main(int argc, char **argv)
 					
 				case 46:
 					{
+						uint8_t master_key[32] = "\xBC\x97\x50\xE1\xAA\xC8\x32\x96\xDA\x6F\x68\xE1\x2C\x26\x77\x19";  
+
+						#if _DEBUG	
+							{	
+								for (int j = 0; j<16; j++)
+									{
+									printf("\nla chiave %d è: ",j);	
+									for (int i = (32*j); i<(32*(j+1)); i++)
+										{
+												printf("%2.2x",master_key[i]);	
+										}
+									}	
+							}; 
+						#endif 
+						
 						printf("-- ========================================\n");
 						printf("--       Program Master Key injection      \n");		
 						printf("--                                         \n");		
@@ -3885,18 +3916,23 @@ int main(int argc, char **argv)
 						data_write[0]=0x04;
 						MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
 						do{ 
-							MRd32(mem_ctrl + 0x22, data_read, 1, 1, NO_PRINT_VALUES); 
-							} while ((data_read[0]>>2) & 0x01);
+							MRd32(mem_ctrl + 0x22, data_read, 1, 1, 1);//NO_PRINT_VALUES); 
+							usleep(15);
+							} while (!((data_read[0]>>2) & 0x01));
 						data_write[0]=0x00;
 						MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
 						printf("** Expansion Done **");
-		
+						MWr32(mem_aes, master_key, 16, 4, 1);//NO_PRINT_VALUES); 
+						data_write[0]=0x00;
+						MWr32(mem_aes + 2047, data_write, 1, 1, NO_PRINT_VALUES); 
+						
 						printf("** Set Encrypt command **");
 						data_write[0]=0x01;
 						MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
 				   		do{ 
-							MRd32(mem_ctrl + 0x22, data_read, 1, 1, NO_PRINT_VALUES); 
-							} while (data_read[0] & 0x01);
+							MRd32(mem_ctrl + 0x22, data_read, 1, 1, 1);//NO_PRINT_VALUES); 
+							usleep(150);
+							} while (!(data_read[0] & 0x01));
 						data_write[0]=0x00;
 						MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 		
 						printf("** Encrypt Done **");			
@@ -3906,20 +3942,21 @@ int main(int argc, char **argv)
 						MWr32(mem_ctrl + 0xAB, data_write, 1, 1, NO_PRINT_VALUES); 
 						MRd32(mem_ctrl + 0xAB, data_read, 1, 1, NO_PRINT_VALUES); 
 						printf("\n AES mode register: %2.2x",data_read[0]); 
-				/* 		
+					
 						printf("\n\n\n ======================================= \t");
 						printf("\n == Master Key INJECTED to LP =="); 
-						IORd(pcie_bar_secs[1] + 0x8C, data_read, 4, 1, NO_PRINT_VALUES);
+						MRd32(mem_ctrl + 0xC0, data_read, 4, 1, NO_PRINT_VALUES);
 						printf("\n Key 127..0:\t 0x%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
-						IORd(pcie_bar_secs[1] + 0x88, data_read, 4, 1, NO_PRINT_VALUES);
+						MRd32(mem_ctrl + 0xC0, data_read, 4, 1, NO_PRINT_VALUES);
 						printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);  
-						IORd(pcie_bar_secs[1] + 0x84, data_read, 4, 1, NO_PRINT_VALUES);
+						MRd32(mem_ctrl + 0xC0, data_read, 4, 1, NO_PRINT_VALUES);
 						printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
-						IORd(pcie_bar_secs[1] + 0x80, data_read, 4, 1, NO_PRINT_VALUES);
+						MRd32(mem_ctrl + 0xC0, data_read, 4, 1, NO_PRINT_VALUES);
 						printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
-						printf("\n ======================================= \t\n\n");
+						printf("\n ======================================= \t\n\n");						
+							
 						
-						
+					/* 		
 						printf("\n\n\n ======================================= \t");
 						printf("\n == unique 17th Key =="); 
 						IORd(pcie_bar_secs[1] + 0x9C, data_read, 4, 1, NO_PRINT_VALUES);
