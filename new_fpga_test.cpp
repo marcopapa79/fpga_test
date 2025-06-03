@@ -89,7 +89,7 @@ using namespace std::chrono;
 /*=============================
 ====== test definition ======*/
 
-#define _DEBUG              0
+#define _DEBUG              1
 
 #define PRINT_ALL           2
 #define PRINT_VALUES     	1
@@ -1250,6 +1250,57 @@ uint32_t *pcie_bar_size_test  = NULL;
 		    
 		return ret_code;
 	}
+	
+						
+		/*
+		 * ===  FUNCTION  ====================================================================== 
+		 *         Name:  openSSLEnc
+		 *  Description:  Encrypt
+		 * =====================================================================================
+		 */
+		int openSSLEnc(uint8_t *key, uint8_t *iv, aes_size_t aes_size, aes_mode_t aes_mode,
+		  uint8_t *cipher_data, uint8_t *data, uint32_t data_length)
+		{
+		  const EVP_CIPHER *cipher = NULL;
+		  EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+		  //EVP_CIPHER_CTX ctx;
+		  int32_t cipher_length, final_length;
+		  uint8_t *ciphertext;
+
+		  if (aes_mode == AES_CBC)
+		  {
+			if (aes_size == AES_128)
+			  cipher = EVP_aes_128_cbc();
+			else
+			  cipher = EVP_aes_256_cbc();
+		  }
+		  else if (aes_mode == AES_ECB)
+		  {
+			if (aes_size == AES_128)
+			  cipher = EVP_aes_128_ecb();
+			else
+			  cipher = EVP_aes_256_ecb();
+		  }
+
+		  EVP_CIPHER_CTX_init(ctx);
+		  EVP_EncryptInit_ex(ctx, cipher, NULL, (uint8_t *)key, (uint8_t *)iv);
+
+		  cipher_length = data_length + EVP_MAX_BLOCK_LENGTH;
+		  ciphertext = (uint8_t *)malloc(cipher_length);
+
+		  EVP_EncryptUpdate(ctx, ciphertext, &cipher_length, (uint8_t *)data, data_length);
+		  EVP_EncryptFinal_ex(ctx, ciphertext + cipher_length, &final_length);
+
+		  // Copy data
+		  memcpy(cipher_data, ciphertext, data_length);
+
+		  // release internal memory
+		  free(ciphertext);
+
+		  EVP_CIPHER_CTX_cleanup(ctx);
+		  EVP_CIPHER_CTX_free(ctx);
+		  return 0;
+		}
 		
 /*================================================
 ==================================================
@@ -1549,6 +1600,8 @@ int main(int argc, char **argv)
 				free(dword_write);
 				free(dword_read);
 			}
+			
+
 
 	/* =====================================
 	========================================
@@ -3871,9 +3924,9 @@ int main(int argc, char **argv)
 						printf("-- ========================================\n");
 						
 						
-						//uint8_t iv[32] = "\x01\x23\x45\x67\x89\x01\x23\x45\x67\x89\x01\x23\x45\x67\x89\x00";
+						uint8_t iv[32] = "\x01\x23\x45\x67\x89\x01\x23\x45\x67\x89\x01\x23\x45\x67\x89\x00";
 						//uint8_t key[32] = "\x4f\x63\x8c\x73\x5f\x61\x43\x01\x56\x78\x24\xb1\xa2\x1a\x4f\x6a";
-						//uint8_t key[32] = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f";
+						uint8_t key[32] = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f";
   						 
 						uint8_t *dst_ssl = (uint8_t *)malloc(sizeSecsBuffer);
 						uint8_t *src = (uint8_t *)malloc(sizeSecsBuffer);
@@ -3913,7 +3966,7 @@ int main(int argc, char **argv)
 								printf("FAILURE: invalid original key file name. Abort\n");								
 								exit=-1;
 							}
-						#if 1 //_DEBUG	
+						#if _DEBUG	
 							{	
 								for (int j = 0; j<16; j++)
 									{
@@ -3956,21 +4009,22 @@ int main(int argc, char **argv)
 						MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 		
 						printf("** Encrypt Done **");	
 
-						MRd32(mem_aes, data_read, 16, 4, 1);//NO_PRINT_VALUES); 
+						MRd32(mem_aes, data_enc_key_i, 16, 4, 1);//NO_PRINT_VALUES); 
 												
-						/*
-						for (key_idx = 0; key_idx<16; key_idx++)
-						{ 	
-							sprintf (path, "sudo ./../git/libsecuress/bin/x64/test-libsecs -enc -k %d -i ./../git/libsecuress/bin/x64/original_key_m -o ./../git/libsecuress/bin/x64/key_enc%d > /dev/null", key_idx, key_idx);
-							system_return = system(path);
-							if (system_return != 0)
-							{
-								printf("system error path %s",path);	
-							}
-						}	
-			
-						 char enc_key_file_name[]="./../git/libsecuress/bin/x64/key_enc0 ";
-						for (key_idx = 0; key_idx<16; key_idx++)
+						
+						//for (key_idx = 0; key_idx<16; key_idx++)
+						//{ 	
+						//	sprintf (path, "sudo ./../git/libsecuress/bin/x64/test-libsecs -enc -k %d -i ./../git/libsecuress/bin/x64/original_key_m -o ./../git/libsecuress/bin/x64/key_enc%d > /dev/null", key_idx, key_idx);
+						//	system_return = system(path);
+						//	if (system_return != 0)
+						//	{
+						//		printf("system error path %s",path);	
+						//	}
+						//}	
+						
+						//char enc_key_file_name[]="./../git/libsecuress/bin/x64/key_enc0 ";
+						//for (key_idx = 0; key_idx<16; key_idx++)
+						for (key_idx = 0; key_idx<1; key_idx++)
 						{    
 							printf("\nKey%d: ",key_idx);	
 							memcpy(key+16, ((uint8_t*)key_p)+32*key_idx, 16);
@@ -3985,6 +4039,12 @@ int main(int argc, char **argv)
   						
 							// Save a copy for later use
 							memcpy(src, key_p, sizeSecsBuffer);
+							#if _DEBUG	
+								for (int i = 0; i<32; i++)
+								{
+									printf("%2.2x",src[i]);	
+								}
+							#endif 
 							//for (int size_idx = 0; size_idx<AES_SIZE_MODES; size_idx++)
 							for (int size_idx = 0; size_idx<1; size_idx++)
 							{
@@ -3996,7 +4056,7 @@ int main(int argc, char **argv)
 								}
 							}
 							
-							sprintf(enc_key_file_name,"./../git/libsecuress/bin/x64/key_enc%d",key_idx);
+							/*sprintf(enc_key_file_name,"./../git/libsecuress/bin/x64/key_enc%d",key_idx);
 							
 							
 							int32_t enc_key_file;	
@@ -4028,7 +4088,7 @@ int main(int argc, char **argv)
 										printf("FAILURE: invalid key file name. Abort\n");								
 										exit=-1;
 									}
-									
+									*/
 								printf("\nCheck encryption with key%d\n",key_idx);	
 								for (int j = 0; j<16; j++)
 										{	
@@ -4075,7 +4135,7 @@ int main(int argc, char **argv)
 								}; 
 							#endif 
 							
-						}; */
+						};
 						free(dst_ssl);			
 						free(src);
 						free(data_enc_key_i);
@@ -4083,7 +4143,7 @@ int main(int argc, char **argv)
 						wait_to_continue();
 						break;
 					}
-					
+				
 				case 46:
 					{
 						//uint8_t master_key[32] = "\xBC\x97\x50\xE1\xAA\xC8\x32\x96\xDA\x6F\x68\xE1\x2C\x26\x77\x19";  

@@ -258,6 +258,9 @@
 			uint64_t * qword_dst 	= (uint64_t *)read_buffer;
 			uint64_t * qword_src 	= (uint64_t *)mem_addr;
 			
+			uint128_t *oword_dst 	= (uint128_t *)read_buffer;
+			uint128_t *oword_src 	= (uint128_t *)mem_addr;
+			
 			switch(byte_alligned) 
 				{	
 					case 1: // 1 byte
@@ -285,7 +288,14 @@
 								}; 
 					break;	
 					
-					case 4:	// 4 bytes - 1DWord				
+					case 4:	// 4 bytes - 1DWord		
+/* 						if (debug_print == 1) 
+						{
+							// print written data
+							printf("\n");
+							printf("Read Mem Access Type:  Byte\n");
+							printf("Address (hex)          Data value (hex)\n");	
+						};  */	
 						for (unsigned int n=0; n<(length/4); n++) 
 							{
 								*(dword_dst+n) = *(dword_src+n);
@@ -293,7 +303,7 @@
 						
 							if (debug_print == 1) 
 								{		
-									for (unsigned int j=0;j<(length/4);j++) printf("dword read is: %8.8x \n",*(dword_dst+j));
+									for (unsigned int j=0;j<(length/4);j++) printf("%8.8x               |      x%8.8x|\n",((uint64_t)dword_src & 0x003f'ffff),*(dword_dst+j));
 								}; 
 					break;
 					
@@ -305,6 +315,17 @@
 							if (debug_print == 1)
 								{		
 									for (unsigned int j=0;j<(length/8);j++) printf("qword read is: %16.16lx \n",*(qword_dst+j));
+								}; 
+					break;
+					
+					case 16:
+						for (unsigned int n=0; n<(length/16); n++) 
+							{
+								*(oword_dst+n) = *(oword_src+n);
+							}
+							if (debug_print == 1)
+								{		
+									for (unsigned int j=0;j<(length/16);j++) printf("oword read is: %32.32lx \n",*(oword_dst+j));
 								}; 
 					break;
 			
