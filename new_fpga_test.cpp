@@ -3935,7 +3935,13 @@ int main(int argc, char **argv)
 						printf("-- ========================================\n");
 						
 						
-						uint8_t iv[32] = "\x01\x23\x45\x67\x89\x01\x23\x45\x67\x89\x01\x23\x45\x67\x89\x00";
+						//uint8_t iv[32] = "\x01\x23\x45\x67\x89\x01\x23\x45\x67\x89\x01\x23\x45\x67\x89\x00";
+						uint8_t iv[32] = "\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xaa\xbb\xcc\xdd\xee\xff"; 
+						//uint8_t iv2[32] = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"; 
+						//uint8_t iv2[32] = "\xcc\xdd\xee\xff\x88\x99\xaa\xbb\x44\x55\x66\x77\x00\x11\x22\x33";
+						uint8_t iv2[32] = "\xff\xee\xdd\xcc\xbb\xaa\x99\x88\x77\x66\x55\x44\x33\x22\x11\x00";
+						//uint8_t iv2[32] = "\x33\x22\x11\x00\x77\x66\x55\x44\xbb\xaa\x99\x88\xff\xee\xdd\xcc";
+						//uint8_t iv2[32] = "\x00\x89\x67\x45\x23\x01\x89\x67\x45\x23\x01\x89\x67\x45\x23\x01";
 						uint8_t open_ssl_key[32] = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f";
   						 
 						uint8_t *dst_ssl = (uint8_t *)malloc(sizeSecsBuffer);
@@ -3987,24 +3993,46 @@ int main(int argc, char **argv)
 										}
 									}
 							}; 
-						#endif 	
+						#endif 
+						
+						// Write init vectoor for CBC
+						MWr32(mem_ctrl + 0xAC, iv2, 4, 4, NO_PRINT_VALUES); 
+						MWr32(mem_ctrl + 0xB0, &iv2[4], 4, 4, NO_PRINT_VALUES); 
+						MWr32(mem_ctrl + 0xB4, &iv2[8], 4, 4, NO_PRINT_VALUES); 
+						MWr32(mem_ctrl + 0xB8, &iv2[12], 4, 4, NO_PRINT_VALUES); 
+						/*iv2[0]
+						iv2[1]&writeCTRL[3]
+						iv2[3]
+						iv2[4]
+						MWr32(mem_ctrl + 0xB0, iv, 4, 4, NO_PRINT_VALUES); 
+						MWr32(mem_ctrl + 0xB4, iv, 4, 4, NO_PRINT_VALUES); 
+						MWr32(mem_ctrl + 0xB8, iv, 4, 4, NO_PRINT_VALUES); 
+						*/// reset aes
+											
+						
 						//for (int size_idx = 0; size_idx<AES_SIZE_MODES; size_idx++)
 							for (int size_idx = 0; size_idx<AES_SIZE_MODES; size_idx++)
 							{
 								//for (int mode_idx = 0; mode_idx < AES_SIZE_MODES; mode_idx++)
-								for (int mode_idx = 0; mode_idx < 1; mode_idx++)
+								for (int mode_idx = 0; mode_idx < AES_SIZE_MODES; mode_idx++)
 								{
-												
+									
 									printf("\n============================", AES_TYPE(mode_idx),AES_SZ(size_idx));//
 									printf("\n** AES%s%s **\n\n", AES_TYPE(mode_idx),AES_SZ(size_idx));//
 									
 									data_write[0]=( (size_idx)+(mode_idx*2) );
 									//printf("** Set AES MODE  **\n");
 									MWr32(mem_ctrl + 0xA0, data_write, 1, 1, NO_PRINT_VALUES); 
-									MRd32(mem_ctrl + 0xA0, data_read, 1, 1, 1);//NO_PRINT_VALUES); 
+									MRd32(mem_ctrl + 0xA0, data_read, 1, 1, NO_PRINT_VALUES); 
 									
 									for (key_idx = 0; key_idx<16; key_idx++)
 										{ 
+									
+											data_write[0]=0x08;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
+											data_write[0]=0x00;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
+											
 											printf("** Select Key %d **\n", key_idx);
 											data_write[0]=key_idx;
 											MWr32(mem_ctrl + 0xA1, data_write, 1, 1, NO_PRINT_VALUES); 
