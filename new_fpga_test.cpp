@@ -1267,7 +1267,7 @@ uint32_t *pcie_bar_size_test  = NULL;
 		{
 		  const EVP_CIPHER *cipher = NULL;
 		  EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
-		  //EVP_CIPHER_CTX ctx;
+		  
 		  int32_t cipher_length, final_length;
 		  uint8_t *ciphertext;
 
@@ -1305,6 +1305,63 @@ uint32_t *pcie_bar_size_test  = NULL;
 		  EVP_CIPHER_CTX_free(ctx);
 		  return 0;
 		}
+			
+		/*
+		 * ===  FUNCTION  ====================================================================== 
+		 *         Name:  openSSLDec
+		 *  Description:  Decrypt
+		 * =====================================================================================
+		 */
+			int openSSLDec(uint8_t *key, uint8_t *iv, aes_size_t aes_size, aes_mode_t aes_mode,
+			uint8_t *decipher_data, uint8_t *data, uint32_t data_length)
+			{
+				const EVP_CIPHER *decipher = NULL;
+				EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+
+				int32_t decipher_length, final_length;
+				uint8_t *deciphertext;
+				
+				  if (aes_mode == AES_CBC)
+				  {
+					if (aes_size == AES_128)
+					  decipher = EVP_aes_128_cbc();
+					else
+					  decipher = EVP_aes_256_cbc();
+				  }
+				  else if (aes_mode == AES_ECB)
+				  {
+					if (aes_size == AES_128)
+					  decipher = EVP_aes_128_ecb();
+					else
+					  decipher = EVP_aes_256_ecb();
+				  }
+
+				EVP_CIPHER_CTX_init(ctx);
+				EVP_DecryptInit_ex(ctx, decipher, NULL, (uint8_t *)key, (uint8_t *)iv);
+				
+				decipher_length = data_length + EVP_MAX_BLOCK_LENGTH;
+				deciphertext = (uint8_t *)malloc(decipher_length);
+				/*
+				 * Provide the message to be decrypted, and obtain the plaintext output.
+				 * EVP_DecryptUpdate can be called multiple times if necessary.
+				 */
+				if(1 != EVP_DecryptUpdate(ctx, deciphertext, &decipher_length, (uint8_t *)data, data_length)) 
+				{
+					fprintf(stderr, "openSSLDec: EVP_DecryptUpdate fallito.\n");					
+				}
+				EVP_DecryptFinal_ex(ctx, deciphertext + decipher_length, &final_length);
+				
+
+				// Copy data
+				memcpy(decipher_data, deciphertext, data_length);
+				/* Clean up */
+				  // release internal memory
+				free(deciphertext);
+				EVP_CIPHER_CTX_cleanup(ctx);
+				EVP_CIPHER_CTX_free(ctx);
+
+			  return 0;
+			}
 		
 /*================================================
 ==================================================
@@ -1762,8 +1819,9 @@ int main(int argc, char **argv)
 		printf("Cmd_39: Write SR protection disable ALL (FPGA FLASH) \n");
 		printf("=============== SRAM TEST ==================\n");		
 		printf("Cmd_40: Program AES encrypted Keys into internal keys memory (4096 bits)\n");	
-		printf("Cmd_41: Verify Key0..15 with open SSL\n");	
-		printf("Cmd_42: Program Master Key injection\n");
+		printf("Cmd_41: Verify Encrypt Key0..15 with open SSL\n");	
+		printf("Cmd_42: Verify Decrypt Key0..15 with open SSL\n");	
+		printf("Cmd_43: Program Master Key injection\n");
 		printf("Cmd_45: AES reset\n");
 		printf("Cmd_60: SRAM Write Test from 0 to MAX size in Normal mode (stress test for consumption)\n");
 		printf("Cmd_61: SRAM Write Test from 0 to MAX size in Mirror mode (stress test for consumption)\n");
@@ -3935,13 +3993,7 @@ int main(int argc, char **argv)
 						printf("-- ========================================\n");
 						
 						
-						//uint8_t iv[32] = "\x01\x23\x45\x67\x89\x01\x23\x45\x67\x89\x01\x23\x45\x67\x89\x00";
 						uint8_t iv[32] = "\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xaa\xbb\xcc\xdd\xee\xff"; 
-						//uint8_t iv2[32] = "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"; 
-						//uint8_t iv2[32] = "\xcc\xdd\xee\xff\x88\x99\xaa\xbb\x44\x55\x66\x77\x00\x11\x22\x33";
-						uint8_t iv2[32] = "\xff\xee\xdd\xcc\xbb\xaa\x99\x88\x77\x66\x55\x44\x33\x22\x11\x00";
-						//uint8_t iv2[32] = "\x33\x22\x11\x00\x77\x66\x55\x44\xbb\xaa\x99\x88\xff\xee\xdd\xcc";
-						//uint8_t iv2[32] = "\x00\x89\x67\x45\x23\x01\x89\x67\x45\x23\x01\x89\x67\x45\x23\x01";
 						uint8_t open_ssl_key[32] = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f";
   						 
 						uint8_t *dst_ssl = (uint8_t *)malloc(sizeSecsBuffer);
@@ -3996,18 +4048,11 @@ int main(int argc, char **argv)
 						#endif 
 						
 						// Write init vectoor for CBC
-						MWr32(mem_ctrl + 0xAC, iv2, 4, 4, NO_PRINT_VALUES); 
-						MWr32(mem_ctrl + 0xB0, &iv2[4], 4, 4, NO_PRINT_VALUES); 
-						MWr32(mem_ctrl + 0xB4, &iv2[8], 4, 4, NO_PRINT_VALUES); 
-						MWr32(mem_ctrl + 0xB8, &iv2[12], 4, 4, NO_PRINT_VALUES); 
-						/*iv2[0]
-						iv2[1]&writeCTRL[3]
-						iv2[3]
-						iv2[4]
-						MWr32(mem_ctrl + 0xB0, iv, 4, 4, NO_PRINT_VALUES); 
-						MWr32(mem_ctrl + 0xB4, iv, 4, 4, NO_PRINT_VALUES); 
-						MWr32(mem_ctrl + 0xB8, iv, 4, 4, NO_PRINT_VALUES); 
-						*/// reset aes
+						MWr32(mem_ctrl + 0xAC, iv, 4, 4, NO_PRINT_VALUES); 
+						MWr32(mem_ctrl + 0xB0, &iv[4], 4, 4, NO_PRINT_VALUES); 
+						MWr32(mem_ctrl + 0xB4, &iv[8], 4, 4, NO_PRINT_VALUES); 
+						MWr32(mem_ctrl + 0xB8, &iv[12], 4, 4, NO_PRINT_VALUES); 
+						
 											
 						
 						//for (int size_idx = 0; size_idx<AES_SIZE_MODES; size_idx++)
@@ -4028,6 +4073,7 @@ int main(int argc, char **argv)
 									for (key_idx = 0; key_idx<16; key_idx++)
 										{ 
 									
+											// reset aes and load Init Vector
 											data_write[0]=0x08;
 											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
 											data_write[0]=0x00;
@@ -4087,7 +4133,7 @@ int main(int argc, char **argv)
 									
 											// Save a copy for later use
 											memcpy(src, key_p, sizeSecsBuffer);
-											#if _DEBUG	
+											#if DEBUG	
 												for (int i = 0; i<32; i++)
 												{
 													printf("%2.2x",src[i]);	
@@ -4151,12 +4197,232 @@ int main(int argc, char **argv)
 						free(src);
 						free(data_enc_key_i);
 						
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}
+					
+				case 42:
+					{
+						printf("-- ========================================\n");
+						printf("--     Decrypt and verify with open SSL    \n");		
+						printf("--  			 KEY0..15                  \n");		
+						printf("-- ========================================\n");
+						
+						
+						uint8_t iv[32] = "\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xaa\xbb\xcc\xdd\xee\xff"; 
+						uint8_t open_ssl_key[32] = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f";
+  						 
+						uint8_t *dst_ssl = (uint8_t *)malloc(sizeSecsBuffer+16);
+						uint8_t *src = (uint8_t *)malloc(sizeSecsBuffer);
+						uint8_t *data_dec_key_i = (uint8_t *)malloc(sizeSecsBuffer);	
+						uint32_t cmp_err = 0;
+						
+						aes_size_t aes_size[AES_SIZE_MODES] = { AES_128, AES_256 };
+						aes_mode_t aes_mode[AES_SIZE_MODES] = { AES_ECB, AES_CBC };
+						
+						char key_file_name[]="original_key_m";
+						int32_t key_file;
+						uint32_t size;
+						uint32_t key_idx;
+							
+							if (key_file_name) {
+								key_file = open(key_file_name, O_RDONLY);						
+										
+								if (key_file >= 0) 
+									{					
+										size = read(key_file, key_p, sizeSecsBuffer);
+										if (size == 0)
+										{
+											printf("FAILURE: file  %s. is empty\n", key_file_name);								
+										};
+										close(key_file);
+										
+										//printf("\nPROGRAM DONE\n");									
+										exit=0;	
+									}								
+								else 
+									{			
+										printf("FAILURE: error opening %s. Abort\n", key_file_name);								
+										exit=-1;
+									}
+							}
+							else {
+								printf("FAILURE: invalid original key file name. Abort\n");								
+								exit=-1;
+							}
+						#if _DEBUG	
+							{	
+								for (int j = 0; j<16; j++)
+									{
+									printf("\nla chiave %d è: ",j);	
+									for (int i = (32*j); i<(32*(j+1)); i++)
+										{
+												printf("%2.2x",key_p[i]);	
+										}
+									}
+							}; 
+						#endif 
+						
+						// Write init vectoor for CBC
+						MWr32(mem_ctrl + 0xAC, iv, 4, 4, NO_PRINT_VALUES); 
+						MWr32(mem_ctrl + 0xB0, &iv[4], 4, 4, NO_PRINT_VALUES); 
+						MWr32(mem_ctrl + 0xB4, &iv[8], 4, 4, NO_PRINT_VALUES); 
+						MWr32(mem_ctrl + 0xB8, &iv[12], 4, 4, NO_PRINT_VALUES); 
+						
+											
+						
+						//for (int size_idx = 0; size_idx<AES_SIZE_MODES; size_idx++)
+							for (int size_idx = 0; size_idx<1; size_idx++)
+							{
+								//for (int mode_idx = 0; mode_idx < AES_SIZE_MODES; mode_idx++)
+								for (int mode_idx = 0; mode_idx < 1; mode_idx++)
+								{
+									
+									printf("\n============================", AES_TYPE(mode_idx),AES_SZ(size_idx));//
+									printf("\n** AES%s%s **\n\n", AES_TYPE(mode_idx),AES_SZ(size_idx));//
+									
+									data_write[0]=( (size_idx)+(mode_idx*2) );
+									//printf("** Set AES MODE  **\n");
+									MWr32(mem_ctrl + 0xA0, data_write, 1, 1, NO_PRINT_VALUES); 
+									MRd32(mem_ctrl + 0xA0, data_read, 1, 1, NO_PRINT_VALUES); 
+									
+									for (key_idx = 0; key_idx<16; key_idx++)
+										{ 
+									
+											// reset aes and load Init Vector
+											data_write[0]=0x08;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
+											data_write[0]=0x00;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
+											
+											printf("** Select Key %d **\n", key_idx);
+											data_write[0]=key_idx;
+											MWr32(mem_ctrl + 0xA1, data_write, 1, 1, NO_PRINT_VALUES); 
+											MRd32(mem_ctrl + 0xA1, data_read, 1, 1, NO_PRINT_VALUES); 
+											
+											//printf("** Set Expansion Key command **\n");
+											data_write[0]=0x04;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
+											do{ 
+												MRd32(mem_ctrl + 0x22, data_read, 1, 1, NO_PRINT_VALUES); 
+												usleep(15);
+												} while (!((data_read[0]>>2) & 0x01));
+											data_write[0]=0x00;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
+											printf("** Expansion Done **  ");
+											
+											MWr32(mem_aes, key_p, 512, 4, NO_PRINT_VALUES); 
+											data_write[0]=0x00;
+											MWr32(mem_aes + 2047, data_write, 1, 1, NO_PRINT_VALUES); 
+											
+											//printf("** Set Dencrypt command **\n");
+											data_write[0]=0x02;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
+											do{ 
+												MRd32(mem_ctrl + 0x22, data_read, 1, 1, NO_PRINT_VALUES); 
+												usleep(150);
+												} while (!((data_read[0]>>1)  & 0x01));
+											data_write[0]=0x00;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 		
+											printf("** Encrypt Done **\n");	
+
+											MRd32(mem_aes, data_dec_key_i, 512, 4, NO_PRINT_VALUES); 
+											
+											
+											//printf("\nKey%d: ",key_idx);	
+											if (size_idx==0)
+												{
+													memcpy(open_ssl_key+16, ((uint8_t*)key_p)+32*key_idx, 16);
+													memcpy(open_ssl_key, (((uint8_t*)key_p)+32*key_idx)+16, 16);
+												}
+											else 
+												{ 
+													memcpy(open_ssl_key, (((uint8_t*)key_p)+32*key_idx), 32);
+												}
+												
+											#if _DEBUG	
+												for (int i = 0; i<32; i++)
+												{
+													printf("%2.2x",open_ssl_key[i]);	
+												}
+											#endif 
+									
+											// Save a copy for later use
+											memcpy(src, key_p, sizeSecsBuffer);
+											#if _DEBUG	
+												for (int i = 0; i<32; i++)
+												{
+													printf("%2.2x",src[i]);	
+												}
+											#endif 
+											printf("debug");	
+												// Encrypt data using standard OpenSSL functions
+												openSSLDec(open_ssl_key, iv, aes_size[size_idx], aes_mode[mode_idx], dst_ssl, src, sizeSecsBuffer+16);		//+16*size_idx									
+										
+											//printf("\nCheck decryption with key%d\n",key_idx);	
+											for (int j = 0; j<16; j++)
+													{	
+													for (int i = (32*j); i<(32*(j+1)); i++)
+														{
+															if (dst_ssl[i]!=data_dec_key_i[i])
+																{
+																	printf("error @ byte %d. Expected decrypted data: %2.2x Got decrypted data %2.2x\n",i,dst_ssl[i],data_dec_key_i[i]);
+																	cmp_err++;	
+																}
+														}
+													}
+											if (cmp_err==0) 
+												{ 
+													printf("Key%d verification PASSED\n",key_idx);
+												}
+											else 
+												{ 
+													printf("Key%d verification FAIL",key_idx);
+													cmp_err=0;
+												}
+											
+											#if DEBUG	
+												{	
+													for (int j = 0; j<16; j++)
+														{
+														printf("\nla riga decifrata %d è: ",j);	
+														for (int i = (32*j); i<(32*(j+1)); i++)
+															{
+																printf("%2.2x",dst_ssl[i]);	
+															}
+														}
+												}; 
+												
+												{	
+													for (int j = 0; j<16; j++)
+														{
+														printf("\nla riga decifrata expected %d è: ",j);	
+														for (int i = (32*j); i<(32*(j+1)); i++)
+															{
+																printf("%2.2x",data_dec_key_i[i]);	
+															}
+														}
+												}; 
+											#endif 
+											
+										}	
+									}			
+								}			
+						
+					
+						free(dst_ssl);			
+						free(src);
+						free(data_dec_key_i);
+						
 						wait_to_continue();
 						break;
 						return 0;
 					}
 				
-				case 42:
+				
+				case 43:
 					{
 						uint8_t master_key[32] = "\xBC\x97\x50\xE1\xAA\xC8\x32\x96\xDA\x6F\x68\xE1\x2C\x26\x77\x19";  
 						//uint8_t master_key[32] = "\xE1\x50\x97\xBC\x96\x32\xC8\xAA\xE1\x68\x6F\xDA\x19\x77\x26\x2C";  
