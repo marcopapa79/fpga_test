@@ -1345,10 +1345,7 @@ uint32_t *pcie_bar_size_test  = NULL;
 				 * Provide the message to be decrypted, and obtain the plaintext output.
 				 * EVP_DecryptUpdate can be called multiple times if necessary.
 				 */
-				if(1 != EVP_DecryptUpdate(ctx, deciphertext, &decipher_length, (uint8_t *)data, data_length)) 
-				{
-					fprintf(stderr, "openSSLDec: EVP_DecryptUpdate fallito.\n");					
-				}
+				EVP_DecryptUpdate(ctx, deciphertext, &decipher_length, (uint8_t *)data, data_length);
 				EVP_DecryptFinal_ex(ctx, deciphertext + decipher_length, &final_length);
 				
 
@@ -4213,6 +4210,7 @@ int main(int argc, char **argv)
 						
 						uint8_t iv[32] = "\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xaa\xbb\xcc\xdd\xee\xff"; 
 						uint8_t open_ssl_key[32] = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f";
+						//uint8_t tmpiv[32] = "\xcc\xdd\xee\xff\x88\x99\xaa\xbb\x44\x55\x66\x77\x00\x11\x22\x33"; 
   						 
 						uint8_t *dst_ssl = (uint8_t *)malloc(sizeSecsBuffer+16);
 						uint8_t *src = (uint8_t *)malloc(sizeSecsBuffer);
@@ -4274,10 +4272,10 @@ int main(int argc, char **argv)
 											
 						
 						//for (int size_idx = 0; size_idx<AES_SIZE_MODES; size_idx++)
-							for (int size_idx = 0; size_idx<1; size_idx++)
+							for (int size_idx = 0; size_idx<AES_SIZE_MODES; size_idx++)
 							{
 								//for (int mode_idx = 0; mode_idx < AES_SIZE_MODES; mode_idx++)
-								for (int mode_idx = 0; mode_idx < 1; mode_idx++)
+								for (int mode_idx = 0; mode_idx < AES_SIZE_MODES; mode_idx++)
 								{
 									
 									printf("\n============================", AES_TYPE(mode_idx),AES_SZ(size_idx));//
