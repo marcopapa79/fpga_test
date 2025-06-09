@@ -4092,13 +4092,15 @@ int main(int argc, char **argv)
 											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
 											printf("** Expansion Done **  ");
 											
+											//printf("** Set Encrypt command **\n");
+											data_write[0]=0x01;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
+											
+											// write pattern in internal EBR
 											MWr32(mem_aes, key_p, 512, 4, NO_PRINT_VALUES); 
 											data_write[0]=0x00;
 											MWr32(mem_aes + 2047, data_write, 1, 1, NO_PRINT_VALUES); 
 											
-											//printf("** Set Encrypt command **\n");
-											data_write[0]=0x01;
-											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
 											do{ 
 												MRd32(mem_ctrl + 0x22, data_read, 1, 1, NO_PRINT_VALUES); 
 												usleep(150);
@@ -4268,11 +4270,10 @@ int main(int argc, char **argv)
 						MWr32(mem_ctrl + 0xB0, &iv[4], 4, 4, NO_PRINT_VALUES); 
 						MWr32(mem_ctrl + 0xB4, &iv[8], 4, 4, NO_PRINT_VALUES); 
 						MWr32(mem_ctrl + 0xB8, &iv[12], 4, 4, NO_PRINT_VALUES); 
-						
-											
+										
 						
 						//for (int size_idx = 0; size_idx<AES_SIZE_MODES; size_idx++)
-							for (int size_idx = 0; size_idx<AES_SIZE_MODES; size_idx++)
+							for (int size_idx = 0; size_idx < AES_SIZE_MODES; size_idx++)
 							{
 								//for (int mode_idx = 0; mode_idx < AES_SIZE_MODES; mode_idx++)
 								for (int mode_idx = 0; mode_idx < AES_SIZE_MODES; mode_idx++)
@@ -4311,13 +4312,15 @@ int main(int argc, char **argv)
 											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
 											printf("** Expansion Done **  ");
 											
+											//printf("** Set Dencrypt command **\n");
+											data_write[0]=0x02;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
+											
+											//printf("** Write pattern internal Memory **\n");
 											MWr32(mem_aes, key_p, 512, 4, NO_PRINT_VALUES); 
 											data_write[0]=0x00;
 											MWr32(mem_aes + 2047, data_write, 1, 1, NO_PRINT_VALUES); 
 											
-											//printf("** Set Dencrypt command **\n");
-											data_write[0]=0x02;
-											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
 											do{ 
 												MRd32(mem_ctrl + 0x22, data_read, 1, 1, NO_PRINT_VALUES); 
 												usleep(150);
