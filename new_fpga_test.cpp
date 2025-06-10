@@ -185,8 +185,8 @@ using namespace std::chrono;
 //      Version
 //       Date
 uint8_t ver_major = 2;
-uint8_t ver_minor = 0;
-char date[]="08/05/2025";
+uint8_t ver_minor = 1;
+char date[]="10/06/2025";
 
 /*===========================*/
 
