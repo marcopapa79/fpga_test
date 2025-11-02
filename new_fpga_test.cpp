@@ -1119,12 +1119,12 @@ uint32_t *pcie_bar_size_test  = NULL;
 				{
 					page++; 
 					printf("FPGA memory read %3.3d.%1.1d%%\r", (1000*page/n_pages)/10, (1000*page/n_pages)%10);
-					fflush(stdout);
+					fflush(stdout);	
 				};
 				IOWr(pcie_bar_io[0] + spi_offset + 0x02, data_wr, 1, 1, 0, NO_PRINT_VALUES);
 				wait_fifo_empty(spi_offset);
 				IORd(pcie_bar_io[0] + spi_offset + 0x02, data_rd, 1, 1, NO_PRINT_VALUES); // RD Byte byten      
-				*(data_read+byten) = *data_rd;	
+				*(data_read+byten) = *data_rd;
 			}; 
 			
 			// User notification
@@ -3719,6 +3719,8 @@ int main(int argc, char **argv)
 						printf("--   (3) Disable Block Lock      	\n");
 						printf("--   (4) Write Page             	\n");
 						printf("--   (5) Read Page              	\n");
+						printf("--   (6) Block Erase              	\n");
+						printf("--   (7) All Page Read             	\n");
 						printf("-- =================================\n");
 						
 						
@@ -3892,7 +3894,7 @@ int main(int argc, char **argv)
 									
 									printf("--   Write Buffer into FIFO        \n");
 									i = 0;
-									while (i < 256)//(i < 4096)
+									while (i < DATA_SIZE_PER_PAGE)
 										{
 										MWr32(mem_ctrl + 0x48, &writeBuffer[i], 4, 4, NO_PRINT_VALUES); 
 										usleep(10);
@@ -3908,8 +3910,8 @@ int main(int argc, char **argv)
 									writeCTRL[1] =0x01;	// program load x4
 									MWr32(mem_ctrl + 0x41, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
-									writeCTRL[0] =0x00;	// block address 0x0800	
-									writeCTRL[1] =0x08;	//
+									writeCTRL[0] =0x00;	// block address 0x0000	
+									writeCTRL[1] =0x00;	//
 									MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
 									MWr32(mem_ctrl + 0x45, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									printf("--   Program Execute     \n");
@@ -3944,13 +3946,21 @@ int main(int argc, char **argv)
 									uint32_t data_type;
 									uint32_t x;
 									
+									
+									uint16_t block = 0;
+									uint8_t page = 0;
 									printf("--   Read Page to FIFO        \n");
 									
 									
-									writeCTRL[0] =0x00;	// block+address to 0x0800
-									writeCTRL[1] =0x08;	//
+									writeCTRL[0] =0x00;	// block+address to 0x0000
+									writeCTRL[1] =0x00;	//
+									writeCTRL[2] =0x00;	//
+											
+									printf("\n--> Leggo Blocco: %d, Pagina: %d (Addr: %02X %02X %02X)\n", block, page, writeCTRL[0], writeCTRL[1], writeCTRL[2]);
+									
 									MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
-									MWr32(mem_ctrl + 0x45, &writeCTRL[1], 1, 1, NO_PRINT_VALUES);  
+									MWr32(mem_ctrl + 0x45, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl + 0x46, &writeCTRL[2], 1, 1, NO_PRINT_VALUES);  
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x04;	// read page
@@ -3960,8 +3970,10 @@ int main(int argc, char **argv)
 									
 									writeCTRL[0] =0x00;	// reset address to 0x0000
 									writeCTRL[1] =0x00;	//
+									writeCTRL[2] =0x00;	//
 									MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
 									MWr32(mem_ctrl + 0x45, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl + 0x46, &writeCTRL[2], 1, 1, NO_PRINT_VALUES); 
 									// Chek FLASH no busy
 									do{ 
 										writeCTRL[0] =0xC0;	// address c0	
@@ -3975,28 +3987,75 @@ int main(int argc, char **argv)
 									} while ((flashSR[2] & 0x01));
 									
 									
-									printf("--   Read From Cache       \n");
-									writeCTRL[0] =0x00;	// address 00	
-									MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
-									usleep(10*1000);
+									// -----------------------------------------------------------
+									// 3. READ FROM CACHE x4 (6Bh) - Lettura dei dati
+									// ---
+											
+									// Invia l'indirizzo di colonna (Column Address) 2 byte: 0x0000
+									writeCTRL[0] = 0x00; 
+									writeCTRL[1] = 0x00;
+									MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); // Colonna 0 (byte 0)
+									MWr32(mem_ctrl + 0x45, &writeCTRL[1], 1, 1, NO_PRINT_VALUES);
 									writeCTRL[0] =0x20;	// Read From Cache
 									MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									
 									i = 0;                    
 									
-									while (i < 8)
+									printf("\n");
+									printf("Read Mem Access Type:  Byte\n");
+									printf("Address (hex)          Data value (hex)\n");
+									printf("                       |          Dword|\n");
+									while (i < DATA_SIZE_PER_PAGE)
 										{
-											MRd32(mem_ctrl+ 0x44, &readBuffer[i], 4, 4, 1);//NO_PRINT_VALUES);
-									
+											MRd32(mem_ctrl+ 0x44, &readBuffer[i], 4, 4, NO_PRINT_VALUES);
+											printf("%8.8x               |      x%2.2x%2.2x%2.2x%2.2x|\n",((uint64_t)i & 0x003f'ffff),*(readBuffer+i),*(readBuffer+i+1),*(readBuffer+i+2),*(readBuffer+i+3));
 												i += 4;		
 		  
 										}
 									
 								break;
 								} 
-
+								
 							case 6:
+								{			
+									// check in MANUAL_CMD_DECODE status 
+									do{ 
+										writeCTRL[0] =0xC0;	// address c0	
+										MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+										usleep(10*1000);
+										writeCTRL[0] =0x04;	// get feature
+										MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+										usleep(10*1000);
+											
+										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, NO_PRINT_VALUES); 
+									} while ((flashSR[2] & 0x01));	
+									
+									writeCTRL[0] =0x00;	// reset address to 0x0000
+									writeCTRL[1] =0x00;	//
+									writeCTRL[2] =0x00;	//
+									MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl + 0x45, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
+									MWr32(mem_ctrl + 0x46, &writeCTRL[2], 1, 1, NO_PRINT_VALUES);
+									printf("--   Block Erase         \n");
+									writeCTRL[0] =0x10;
+									MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+									usleep(10*1000);
+									do{ 
+										writeCTRL[0] =0xC0;	// address c0	
+										MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+										usleep(10*1000);
+										writeCTRL[0] =0x04;	// get feature
+										MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+										usleep(10*1000);
+											
+										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, NO_PRINT_VALUES); 
+									} while ((flashSR[2] & 0x01));	
+									
+								break;
+								} 
+
+							case 7:
 								{	
 									uint32_t test_size = 4096;
 									uint32_t data_type;
@@ -4073,17 +4132,21 @@ int main(int argc, char **argv)
 											// -----------------------------------------------------------
 											i = 0;                    
 											
-											while (i < 8)
-												{
-													MRd32(mem_ctrl+ 0x44, &readBuffer[i], 4, 4, 1);//NO_PRINT_VALUES);
-											
-														i += 4;		
-				  
-												}
+											printf("\n");
+											printf("Read Mem Access Type:  Byte\n");
+											printf("Address (hex)          Data value (hex)\n");
+											printf("                       |          Dword|\n");
+											while (i < DATA_SIZE_PER_PAGE)
+											{
+												MRd32(mem_ctrl+ 0x44, &readBuffer[i], 4, 4, NO_PRINT_VALUES);
+												printf("%8.8x               |      x%2.2x%2.2x%2.2x%2.2x|\n",((uint64_t)i & 0x003f'ffff),*(readBuffer+i),*(readBuffer+i+1),*(readBuffer+i+2),*(readBuffer+i+3));
+													i += 4;		
+			  
 											}
 										}
+									}
 
-										printf("\n--- FINE LETTURA DI TUTTA LA MEMORIA ---\n");
+									printf("\n--- FINE LETTURA DI TUTTA LA MEMORIA ---\n");
 									
 								break;
 								}  
