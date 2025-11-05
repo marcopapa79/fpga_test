@@ -3706,6 +3706,7 @@ int main(int argc, char **argv)
 						uint8_t *writeCTRL = (uint8_t*)calloc(32, sizeof(uint8_t));
 						uint8_t *flashSR = (uint8_t *)calloc(4,sizeof(uint8_t));	
 						uint8_t *setFeatureCK = (uint8_t *)calloc(4,sizeof(uint8_t));	
+						uint8_t *fifoSTATUS = (uint8_t *)calloc(4,sizeof(uint8_t));	
 						//uint8_t *nvregister = (uint8_t *)calloc(8,sizeof(uint8_t));	
 						uint8_t *writeBuffer = (uint8_t*)calloc(4352, sizeof(uint8_t));  // Page size ×1: 4352 bytes (4096 + 256 bytes)
 						uint8_t *readBuffer = (uint8_t*)calloc(4352, sizeof(uint8_t));  // Page size ×1: 4352 bytes (4096 + 256 bytes)
@@ -3750,7 +3751,7 @@ int main(int argc, char **argv)
 							case 1:
 								{			
 									//printf("--   Chek FLASH no busy         \n");
-									// check in MANUAL_CMD_DECODE status 
+									// Chek FLASH no busy
 									do{ 
 										writeCTRL[0] =0xC0;	// address c0	
 										MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
@@ -3777,8 +3778,8 @@ int main(int argc, char **argv)
 									writeCTRL[0] =0x40;
 									MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
-									//printf("--   Chek FLASH no busy         \n");
-									// check in MANUAL_CMD_DECODE status 
+									//printf("--   Chek FLASH WEL done         \n");	
+									// Chek FLASH WEL done
 									do{ 
 										writeCTRL[0] =0xC0;	// address c0	
 										MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
@@ -3900,6 +3901,23 @@ int main(int argc, char **argv)
 										usleep(10);
 										i += 4;
 									}
+									
+									printf("--   WEL        \n");
+									writeCTRL[0] =0x40;
+									MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+									usleep(10*1000);
+									//printf("--   Chek FLASH WEL done         \n");									
+									do{ 
+										writeCTRL[0] =0xC0;	// address c0	
+										MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+										usleep(10*1000);
+										writeCTRL[0] =0x04;	// get feature
+										MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+										usleep(10*1000);
+											
+										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, NO_PRINT_VALUES); 
+									} while (!(flashSR[2] & 0x02));	
+									
 									printf("--   Program Load x4       \n");
 									writeCTRL[0] =0x00;	// page address 0x0000	
 									writeCTRL[1] =0x00;	//
@@ -3967,7 +3985,9 @@ int main(int argc, char **argv)
 									MWr32(mem_ctrl + 0x41, &writeCTRL[1], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									
-									
+									MRd32(mem_ctrl+ 0x4C, &fifoSTATUS[i], 4, 4, NO_PRINT_VALUES);
+									printf("\n--> FIFO control RST x%2.2x,\n--> fifo2flash diff pointer x%2.2x,\n--> flash2fifo diff pointer x%2.2x,\n--> high part_f2f x%2.2x \n", (fifoSTATUS[0] & 0x0F), (fifoSTATUS[1] & 0xFF), (fifoSTATUS[2] & 0xFF), (fifoSTATUS[3] & 0x0F));
+											
 									writeCTRL[0] =0x00;	// reset address to 0x0000
 									writeCTRL[1] =0x00;	//
 									writeCTRL[2] =0x00;	//
@@ -4013,13 +4033,31 @@ int main(int argc, char **argv)
 												i += 4;		
 		  
 										}
+									MRd32(mem_ctrl+ 0x4C, &fifoSTATUS[i], 4, 4, NO_PRINT_VALUES);
+									printf("\n--> FIFO control RST x%2.2x,\n--> fifo2flash diff pointer x%2.2x,\n--> flash2fifo diff pointer x%2.2x,\n--> high part_f2f x%2.2x \n", (fifoSTATUS[0] & 0x0F), (fifoSTATUS[1] & 0xFF), (fifoSTATUS[2] & 0xFF), (fifoSTATUS[3] & 0x0F));
 									
 								break;
 								} 
 								
 							case 6:
 								{			
-									// check in MANUAL_CMD_DECODE status 
+									printf("--   WEL        \n");
+									writeCTRL[0] =0x40;
+									MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+									usleep(10*1000);
+									//printf("--   Chek FLASH WEL done         \n");									
+									do{ 
+										writeCTRL[0] =0xC0;	// address c0	
+										MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+										usleep(10*1000);
+										writeCTRL[0] =0x04;	// get feature
+										MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+										usleep(10*1000);
+											
+										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, NO_PRINT_VALUES); 
+									} while (!(flashSR[2] & 0x02));	
+									
+									// Chek FLASH no busy
 									do{ 
 										writeCTRL[0] =0xC0;	// address c0	
 										MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
@@ -4143,6 +4181,9 @@ int main(int argc, char **argv)
 													i += 4;		
 			  
 											}
+											MRd32(mem_ctrl+ 0x4C, &fifoSTATUS[i], 4, 4, NO_PRINT_VALUES);
+											printf("\n--> FIFO control RST x%2.2x,\n--> fifo2flash diff pointer x%2.2x,\n--> flash2fifo diff pointer x%2.2x,\n--> high part_f2f x%2.2x \n", (fifoSTATUS[0] & 0x0F), (fifoSTATUS[1] & 0xFF), (fifoSTATUS[2] & 0xFF), (fifoSTATUS[3] & 0x0F));
+										
 										}
 									}
 
