@@ -206,6 +206,7 @@ int f_read = 0;                     // FPGA read code command (default: no)
 int f_write = 0;                    // FPGA write code command (default: no)
 int f_save_fout = 0;                // Save the FPGA content in an output file (default: no) 
 int f_help = 0;                		// Help menu (default: no) 
+int f_debug = 0;					// Debug register Check 
 int f_check = 0;                	// Function Check 
 int f_verbose = 0;					// Verbosity
 
@@ -244,6 +245,7 @@ uint32_t sizeSecsBuffer = 32*16;
 
 #define AES_SZ(x)((x) == 1?"_256":"_128")
 #define AES_TYPE(x)((x) == 1?"_CBC":"_ECB")
+
 
 
 
@@ -1110,11 +1112,15 @@ uint32_t *pcie_bar_size_test  = NULL;
 			
 			IOWr(pcie_bar_io[0] + spi_offset + 0x02, start_addr_v, 1, 1, 0, NO_PRINT_VALUES); // Address 7..0      
 			wait_fifo_empty(spi_offset);
-			IORd(pcie_bar_io[0] + spi_offset + 0x02, data_rd, 1, 1, NO_PRINT_VALUES);     
-		
+			IORd(pcie_bar_io[0] + spi_offset + 0x02, data_rd, 1, 1, NO_PRINT_VALUES);   
+			
+			printf("\nblock_size_v: %d\n",block_size_v);
+			printf("n_pages: %d\n",n_pages);
+			
 			data_wr[0]= 0x00;
 			for (byten = 0; byten < block_size_v; byten++)
 			{
+				//printf("byten: %d\n",byten);
 				if (!(byten%256)) 
 				{
 					page++; 
@@ -1389,13 +1395,12 @@ int main(int argc, char **argv)
         else if(strncmp(argv[n], "-help", 5)==0) {
             // Set the padding value to 00
             f_help = 1;
-        }
+        }		
 		
-		/*
-        else if (strncmp(argv[n], "-b", 2)==0) {
-            // Set the binary output flag
-            f_binary = 1;
-        }
+        else if (strncmp(argv[n], "-d", 2)==0) {
+            // debug register check
+            f_debug = 1;
+        }/*
         else if (strncmp(argv[n], "-t", 2)==0) {
             // Reset the binary output flag
             f_binary = 0;
@@ -1664,6 +1669,170 @@ int main(int argc, char **argv)
 				free(dword_read);
 			}
 			
+			if (f_debug) 
+			
+				{	
+					
+						uint8_t *readSTATUS = (uint8_t *)calloc(4,sizeof(uint8_t));	
+						// MRAM STATUS_CMD
+						printf("\n ======================================= \t");
+						printf("\n ==   MRAM STATUS check  ==");
+						MRd32(mem_ctrl + 0x10, readSTATUS, 1, 1, NO_PRINT_VALUES);
+						if ((readSTATUS[0]&0xff) == 0x02) {printf("\n MRAM is in USER MODE, you can access data "); printf("-> SUCCESS "); }
+						else
+								{printf("\n MRAM is in MANUAL MODE, you cannot access data ");printf("-> ERRORE "); }
+							 
+						// jtag ID
+						#define MAX_KEYS 6
+				
+						typedef struct {
+							uint32_t id_31_0;    
+							uint32_t id_63_32;
+							uint32_t id_95_64;
+							uint32_t id_127_96;  
+						} UniqueID;
+					
+					
+						const UniqueID expected_keys[MAX_KEYS]= {
+					
+							{// Chiave 1
+								.id_31_0 	= 0x3402a048,
+								.id_63_32 	= 0x21b82430,
+								.id_95_64 	= 0x04503d7f,
+								.id_127_96 = 0x11eab905
+							 },
+							
+							{// Chiave 2
+								.id_31_0 	= 0xf8001260,
+								.id_63_32 	= 0xedba961a,
+								.id_95_64 	= 0x0c503d7f,
+								.id_127_96 = 0x19eab905
+							},
+							
+							{// Chiave 3
+								.id_31_0 	= 0x7402b05f,
+								.id_63_32 	= 0x61b83425,
+								.id_95_64 	= 0x04503f7f,
+								.id_127_96  = 0x11eabb05
+							},
+							
+							{// Chiave 4
+								.id_31_0 	= 0xf8003060,
+								.id_63_32 	= 0xedbab41a,
+								.id_95_64 	= 0x0c503d7f,
+								.id_127_96 = 0x19eab905
+							},
+							
+							{// Chiave 5
+								.id_31_0 	= 0x96060fa9,
+								.id_63_32 	= 0x83bc8bd3,
+								.id_95_64 	= 0x2034b2d1,
+								.id_127_96 = 0x358e36ab
+							},
+							
+							{// Chiave 5
+								.id_31_0 	= 0xb6048f8b,
+								.id_63_32 	= 0xa3be0bf1,
+								.id_95_64 	= 0x003430bb,
+								.id_127_96 = 0x158eb4c1				
+							}
+						};
+				
+						UniqueID read_id;
+						uint32_t vld_id = 0;
+						
+						MRd32(mem_ctrl + 0xD0, data_read, 4, 1, NO_PRINT_VALUES); 
+						uni17key[0]=data_read[0];
+						uni17key[1]=data_read[1];
+						uni17key[2]=data_read[2];
+						uni17key[3]=data_read[3];
+						
+						read_id.id_31_0 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
+						
+						MRd32(mem_ctrl + 0xD4, data_read, 4, 1, NO_PRINT_VALUES); 
+						uni17key[4]=data_read[0];
+						uni17key[5]=data_read[1];
+						uni17key[6]=data_read[2];
+						uni17key[7]=data_read[3];        
+						
+						read_id.id_63_32 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
+						
+						
+						MRd32(mem_ctrl + 0xD8, data_read, 4, 1, NO_PRINT_VALUES); 
+						uni17key[8]=data_read[0];
+						uni17key[9]=data_read[1];
+						uni17key[10]=data_read[2];
+						uni17key[11]=data_read[3];  
+						
+						read_id.id_95_64 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);
+						
+						MRd32(mem_ctrl + 0xDC, data_read, 4, 1, NO_PRINT_VALUES); 
+						uni17key[12]=data_read[0];
+						uni17key[13]=data_read[1];
+						uni17key[14]=data_read[2];
+						uni17key[15]=data_read[3];	
+						
+						read_id.id_127_96 = ((data_read[3]&0xff) << 24) | ((data_read[2]&0xff) << 16) | ((data_read[1]&0xff) << 8) | (data_read[0]&0xff);  
+						
+						printf("\n ======================================= \t");
+						printf("\n ===      Unique ID key      ===");
+						// 	
+						printf("\n Id 127..0: 0x%2.2x%2.2x%2.2x%2.2x",uni17key[15]&0xff,uni17key[14]&0xff,uni17key[13]&0xff,uni17key[12]&0xff); 	
+						printf(".0x%2.2x%2.2x%2.2x%2.2x",uni17key[11]&0xff,uni17key[10]&0xff,uni17key[9]&0xff,uni17key[8]&0xff); 	
+						printf(".0x%2.2x%2.2x%2.2x%2.2x",uni17key[7]&0xff,uni17key[6]&0xff,uni17key[5]&0xff,uni17key[4]&0xff); 	
+						printf(".0x%2.2x%2.2x%2.2x%2.2x",uni17key[3]&0xff,uni17key[2]&0xff,uni17key[1]&0xff,uni17key[0]&0xff); 	
+						
+						
+						for (int i = 0; i < MAX_KEYS; i++) {
+							( (read_id.id_31_0 == expected_keys[i].id_31_0) & (read_id.id_63_32 == expected_keys[i].id_63_32) & (read_id.id_95_64 == expected_keys[i].id_95_64) & (read_id.id_127_96 == expected_keys[i].id_127_96)  ) ?  vld_id=i : vld_id;  
+						}	
+						
+						vld_id == 0 ? printf(" -> ERRORE \n\n") : printf(" -> SUCCESS"); printf(" Chiave Board N° %d\n",++vld_id) ; 
+			
+			
+							printf("\n ======================================= \t");
+							printf("\n ==      Master Key INJECTED to LP    =="); 
+							MRd32(mem_ctrl + 0xCC, data_read, 4, 1, NO_PRINT_VALUES);
+							printf("\n Key 127..0:\t 0x%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							MRd32(mem_ctrl + 0xC8, data_read, 4, 1, NO_PRINT_VALUES);
+							printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);  
+							MRd32(mem_ctrl + 0xC4, data_read, 4, 1, NO_PRINT_VALUES);
+							printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
+							MRd32(mem_ctrl + 0xC0, data_read, 4, 1, NO_PRINT_VALUES);
+							printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
+							printf("\n ======================================= \t\n");						
+							
+			
+							printf("\n ========================================= \t");
+							printf("\n ==        Master Key original          =="); 
+							printf("\n == Master Key dechyp after current POR =="); 
+							MRd32(mem_ctrl + 0x6C, data_read, 4, 1, NO_PRINT_VALUES);
+							printf("\n Key 127..0:\t 0x%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							MRd32(mem_ctrl + 0x68, data_read, 4, 1, NO_PRINT_VALUES);
+							printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);  
+							MRd32(mem_ctrl + 0x64, data_read, 4, 1, NO_PRINT_VALUES);
+							printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
+							MRd32(mem_ctrl + 0x60, data_read, 4, 1, NO_PRINT_VALUES);
+							printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
+							printf("\n ========================================= \t\n");
+							
+							printf("\n ========================================= \t");
+							printf("\n ==        Master Key from LP           =="); 
+							printf("\n ==   Master Key from LP before decyp   =="); 
+							MRd32(mem_ctrl + 0x7C, data_read, 4, 1, NO_PRINT_VALUES);
+							printf("\n Key 127..0:\t 0x%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+							MRd32(mem_ctrl + 0x78, data_read, 4, 1, NO_PRINT_VALUES);
+							printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);  
+							MRd32(mem_ctrl + 0x74, data_read, 4, 1, NO_PRINT_VALUES);
+							printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
+							MRd32(mem_ctrl + 0x70, data_read, 4, 1, NO_PRINT_VALUES);
+							printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
+							printf("\n ========================================= \t\n");
+							
+						free(readSTATUS);
+				
+					exit(0);
+				}
 
 
 	/* =====================================
@@ -1843,7 +2012,7 @@ int main(int argc, char **argv)
 		printf("====================================\n"); 
 		printf("\n"); 
 		
-		#define MAX_KEYS 4
+		#define MAX_KEYS 6
 		
 		typedef struct {
 			uint32_t id_31_0;    
@@ -1881,8 +2050,21 @@ int main(int argc, char **argv)
 				.id_63_32 	= 0xedbab41a,
 				.id_95_64 	= 0x0c503d7f,
 				.id_127_96 = 0x19eab905
-			}
+			},
 			
+			{// Chiave 5
+				.id_31_0 	= 0x96060fa9,
+				.id_63_32 	= 0x83bc8bd3,
+				.id_95_64 	= 0x2034b2d1,
+				.id_127_96 = 0x358e36ab
+			},
+			
+			{// Chiave 5
+				.id_31_0 	= 0xb6048f8b,
+				.id_63_32 	= 0xa3be0bf1,
+				.id_95_64 	= 0x003430bb,
+				.id_127_96 = 0x158eb4c1				
+			}
 		};
 		
 		UniqueID read_id;
@@ -1937,7 +2119,7 @@ int main(int argc, char **argv)
 		
 		
 						printf("\n ======================================= \t");
-						printf("\n == Master Key INJECTED to LP =="); 
+						printf("\n ==      Master Key INJECTED to LP    =="); 
 						MRd32(mem_ctrl + 0xCC, data_read, 4, 1, NO_PRINT_VALUES);
 						printf("\n Key 127..0:\t 0x%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
 						MRd32(mem_ctrl + 0xC8, data_read, 4, 1, NO_PRINT_VALUES);
@@ -1949,8 +2131,9 @@ int main(int argc, char **argv)
 						printf("\n ======================================= \t\n");						
 						
 		
-						printf("\n ======================================= \t");
-						printf("\n == MAster Key original =="); 
+						printf("\n ========================================= \t");
+						printf("\n ==        Master Key original          =="); 
+						printf("\n == Master Key dechyp after current POR =="); 
 						MRd32(mem_ctrl + 0x6C, data_read, 4, 1, NO_PRINT_VALUES);
 						printf("\n Key 127..0:\t 0x%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
 						MRd32(mem_ctrl + 0x68, data_read, 4, 1, NO_PRINT_VALUES);
@@ -1959,7 +2142,20 @@ int main(int argc, char **argv)
 						printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
 						MRd32(mem_ctrl + 0x60, data_read, 4, 1, NO_PRINT_VALUES);
 						printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
-						printf("\n ======================================= \t\n");
+						printf("\n ========================================= \t\n");
+						
+						printf("\n ========================================= \t");
+						printf("\n ==        Master Key from LP           =="); 
+						printf("\n ==   Master Key from LP before decyp   =="); 
+						MRd32(mem_ctrl + 0x7C, data_read, 4, 1, NO_PRINT_VALUES);
+						printf("\n Key 127..0:\t 0x%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+						MRd32(mem_ctrl + 0x78, data_read, 4, 1, NO_PRINT_VALUES);
+						printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);  
+						MRd32(mem_ctrl + 0x74, data_read, 4, 1, NO_PRINT_VALUES);
+						printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
+						MRd32(mem_ctrl + 0x70, data_read, 4, 1, NO_PRINT_VALUES);
+						printf(".%2.2x%2.2x%2.2x%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff);
+						printf("\n ========================================= \t\n");
 						
 		printf("\n\n\n");
 		//IORd(pcie_bar_mem[1] + 0x14, data_read, 2, 1, NO_PRINT_VALUES); 
@@ -3744,8 +3940,15 @@ int main(int argc, char **argv)
 										MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
 										usleep(10*1000);
 											
-										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, 1);//NO_PRINT_VALUES); 
-									} while ((flashSR[2] & 0x01));										
+										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, NO_PRINT_VALUES); 
+									} while ((flashSR[2] & 0x01));
+								
+									//printf("\n DOUT_TYPE \t= %s", IO_TYPE((data_read[0]>>3)&0x1F)); flashSR[2]
+									printf("\n PROGRAM FAIL\t= %d", ((flashSR[2]>>3)&0x01));	
+									printf("\n ERASE FAIL\t= %d", ((flashSR[2]>>2)&0x01));	
+									printf("\n WRITE ENABLE LATCH\t= %d", ((flashSR[2]>>1)&0x01));	
+									printf("\n FLASH BUSY\t= %d", (flashSR[2]&0x01));	
+									printf("\n ");	
 								break;
 								} 
 							case 1:
@@ -3763,6 +3966,13 @@ int main(int argc, char **argv)
 										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, NO_PRINT_VALUES); 
 									} while ((flashSR[2] & 0x01));	
 
+									//printf("\n DOUT_TYPE \t= %s", IO_TYPE((data_read[0]>>3)&0x1F)); flashSR[2]
+									printf("\n PROGRAM FAIL\t= %d", ((flashSR[2]>>3)&0x01));	
+									printf("\n ERASE FAIL\t= %d", ((flashSR[2]>>2)&0x01));	
+									printf("\n WRITE ENABLE LATCH\t= %d", ((flashSR[2]>>1)&0x01));	
+									printf("\n FLASH BUSY\t= %d", (flashSR[2]&0x01));	
+									printf("\n ");
+									
 									printf("--   Read ID        \n");
 									writeCTRL[0] =0x01;
 									MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
@@ -3788,25 +3998,67 @@ int main(int argc, char **argv)
 										MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
 										usleep(10*1000);
 											
-										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, NO_PRINT_VALUES); 
+										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, 1);//NO_PRINT_VALUES); 
 									} while (!(flashSR[2] & 0x02));	
+									printf("\n PROGRAM FAIL\t= %d", ((flashSR[2]>>3)&0x01));	
+									printf("\n ERASE FAIL\t= %d", ((flashSR[2]>>2)&0x01));	
+									printf("\n WRITE ENABLE LATCH\t= %d", ((flashSR[2]>>1)&0x01));	
+									printf("\n FLASH BUSY\t= %d", (flashSR[2]&0x01));	
+									printf("\n ");	
 								break;
 								} 
 							case 3:
 								{		
-									printf("--   Set Feature Command        \n");
+									printf("--   Set Feature Check        \n");		
 									writeCTRL[0] =0xa0;	// address a0	
 									MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
-									writeCTRL[0] =0x02;	// set feature
+									writeCTRL[0] =0x04;	// get feature
 									MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+									usleep(10*1000);
+										
+									MRd32(mem_ctrl + 0x42, setFeatureCK, 1, 1, 1);//NO_PRINT_VALUES); 
+									usleep(10*1000);
+									
+									// 06h (Write Enable)
+									printf("--   WEL        \n");
+									writeCTRL[0] =0x40;
+									MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+									usleep(10*1000);
+									//printf("--   Chek FLASH WEL done         \n");	
+									// Chek FLASH WEL done
+									do{ 
+										writeCTRL[0] =0xC0;	// address c0	
+										MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+										usleep(10*1000);
+										writeCTRL[0] =0x04;	// get feature
+										MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+										usleep(10*1000);
+											
+										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, 1);//NO_PRINT_VALUES); 
+									} while (!(flashSR[2] & 0x02));	
+									printf("\n PROGRAM FAIL\t= %d", ((flashSR[2]>>3)&0x01));	
+									printf("\n ERASE FAIL\t= %d", ((flashSR[2]>>2)&0x01));	
+									printf("\n WRITE ENABLE LATCH\t= %d", ((flashSR[2]>>1)&0x01));	
+									printf("\n FLASH BUSY\t= %d", (flashSR[2]&0x01));	
+									printf("\n ");	
+									
+									
+									// 1Fh + A0h + 00h (Sblocca tutti i blocchi)
+									printf("--   Set Feature Command        \n");
+									writeCTRL[0] =0xa0;	// address a0	
+									MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
 									usleep(10*1000);
 									writeCTRL[0] =0x00;	
 									writeCTRL[1] =0x00;	
 									writeCTRL[2] =0x00;	
 									writeCTRL[3] =0x00;	// set feature data
-									MWr32(mem_ctrl + 0x43, &writeCTRL[3], 1, 1, NO_PRINT_VALUES); 
-									usleep(10*1000);	
+									MWr32(mem_ctrl + 0x47, &writeCTRL[3], 1, 1, NO_PRINT_VALUES); 
+									usleep(10*1000);
+									writeCTRL[0] =0x02;	// set feature
+									MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+									usleep(10*1000);
+						
 									printf("--   Set Feature Check        \n");		
 									writeCTRL[0] =0xa0;	// address a0	
 									MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
@@ -3867,7 +4119,7 @@ int main(int argc, char **argv)
 											}  
 										case 4:
 											{	
-												printf("Assigning random values to a %u bytes local buffer...\n", test_size);
+												printf("Assigning dword values to a %u bytes local buffer...\n", test_size);
 												for (x = 0; x < test_size/4; x++)
 													{
 														*(writeBuffer + x*4) = (uint8_t)(x+0xD0);// & 0x000000FF);  
@@ -3918,6 +4170,12 @@ int main(int argc, char **argv)
 										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, NO_PRINT_VALUES); 
 									} while (!(flashSR[2] & 0x02));	
 									
+									printf("\n PROGRAM FAIL\t= %d", ((flashSR[2]>>3)&0x01));	
+									printf("\n ERASE FAIL\t= %d", ((flashSR[2]>>2)&0x01));	
+									printf("\n WRITE ENABLE LATCH\t= %d", ((flashSR[2]>>1)&0x01));	
+									printf("\n FLASH BUSY\t= %d", (flashSR[2]&0x01));	
+									printf("\n ");	
+									
 									printf("--   Program Load x4       \n");
 									writeCTRL[0] =0x00;	// page address 0x0000	
 									writeCTRL[1] =0x00;	//
@@ -3953,7 +4211,13 @@ int main(int argc, char **argv)
 										usleep(10*1000);
 											
 										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, 1);//NO_PRINT_VALUES); 
-									} while ((flashSR[2] & 0x01));	 
+									} while ((flashSR[2] & 0x01));	
+
+									printf("\n PROGRAM FAIL\t= %d", ((flashSR[2]>>3)&0x01));	
+									printf("\n ERASE FAIL\t= %d", ((flashSR[2]>>2)&0x01));	
+									printf("\n WRITE ENABLE LATCH\t= %d", ((flashSR[2]>>1)&0x01));	
+									printf("\n FLASH BUSY\t= %d", (flashSR[2]&0x01));	
+									printf("\n ");										
 									
 								break;
 								} 
@@ -4425,6 +4689,14 @@ int main(int argc, char **argv)
 						uint8_t *key_encr  	= (uint8_t *)calloc (sizeSecsBuffer,sizeof(uint8_t));
 						writeBuffer = (uint8_t*)calloc(sizeSecsBuffer, sizeof(uint8_t));
 						
+						
+						MRd32(mem_ctrl + 0xA3, data_read, 1, 1, 1);//NO_PRINT_VALUES); 
+						printf("\n\n\n ======================================= \t");
+						printf("\n =========== Debug Part =========== \t");
+						printf("\n\n == Master Key Ready flag == \t %s",MASTER_KEY_FROM_LP((data_read[0]>>7)&0x01));
+						printf("\n == Autentication Status == \t %s",AUTHENTICA((data_read[0]>>6)&0x01));
+						printf("\n\n ======================================= \t");
+						
 						if (key_enc_file_name) {
 								key_file = open(key_enc_file_name, O_RDONLY);						
 										
@@ -4488,6 +4760,13 @@ int main(int argc, char **argv)
 						printf("\n BIOS_Key written    \t= %s\n", BIOS((data_read[0]>>1)&0x01));
 						//printf("\n LP master key ready \t= %s", M_KEY_RDY((data_read[0]>>2)&0x01));
 						//printf("\n expanded 17th key \t= %s", EXP17THKEY((data_read[0]>>3)&0x01));
+						
+						MRd32(mem_ctrl + 0xA3, data_read, 1, 1, 1);//NO_PRINT_VALUES); 
+						printf("\n\n\n ======================================= \t");
+						printf("\n =========== Debug Part =========== \t");
+						printf("\n\n == Master Key Ready flag == \t %s",MASTER_KEY_FROM_LP((data_read[0]>>7)&0x01));
+						printf("\n == Autentication Status == \t %s",AUTHENTICA((data_read[0]>>6)&0x01));
+						printf("\n\n ======================================= \t");
 						
 						free(writeBuffer);
 						wait_to_continue();
@@ -4971,6 +5250,7 @@ int main(int argc, char **argv)
 						MRd32(mem_ctrl + 0xAB, data_read, 1, 1, NO_PRINT_VALUES); 
 						
 						printf("\n AES mode register: %2.2x",data_read[0]);
+						MRd32(mem_ctrl + 0xA0, data_read, 1, 1, 1); 
 						
 						printf("** Set Expansion Key command **");
 						data_write[0]=0x04;
