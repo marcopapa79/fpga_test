@@ -1995,6 +1995,7 @@ int main(int argc, char **argv)
 		printf("Cmd_42: Verify Decrypt Key0..15 with open SSL\n");	
 		printf("Cmd_43: Program Master Key injection\n");
 		printf("Cmd_45: AES reset\n");
+		printf("Cmd_50: RiscV RST\n");
 		printf("Cmd_60: SRAM Write Test from 0 to MAX size in Normal mode (stress test for consumption)\n");
 		printf("Cmd_61: SRAM Write Test from 0 to MAX size in Mirror mode (stress test for consumption)\n");
 		printf("Cmd_62: SRAM Write Test and Read back/verify from 0 to MAX size in Normal mode 64\n");
@@ -2006,6 +2007,8 @@ int main(int argc, char **argv)
 		printf("Cmd_73: Set Dout and readback Feedback\n");
 		printf("Cmd_74: Set Dout and read DIN status\n");
 		printf("Cmd_75: Check Feedback\n");
+		printf("Cmd_76: Set Debounce Reg\n");
+		printf("Cmd_77: Check Debounce Reg\n");
 		printf("=========== PCIe utility ===========\n\n");
 		printf("Cmd_99: Get PCIe status/Enable PCIe \n");
 		printf("        Set command reg             \n\n");
@@ -5304,7 +5307,32 @@ int main(int argc, char **argv)
 						return 0;
 					} 
 
+				case 50:
+					{
+											
+						printf("-- ========================================\n");
+						printf("--                Reset RiscV              \n");		
+						printf("--                                         \n");		
+						printf("-- ========================================\n");
 						
+						
+						data_write[0]=0x00;
+						MWr32(mem_ctrl + 0xBC, data_write, 1, 1, NO_PRINT_VALUES); 
+						
+						printf("** Write RiscV reset **");
+						
+						data_write[0]=0x01;
+						MWr32(mem_ctrl + 0xBC, data_write, 1, 1, NO_PRINT_VALUES); 
+						
+						printf("** Release RiscV reset**");
+						
+						
+				
+						wait_to_continue();
+						break;
+						return 0;
+					} 
+		
 				case 66 : 
 					{
 						
@@ -5942,7 +5970,64 @@ int main(int argc, char **argv)
 						wait_to_continue();
 						break;
 						return 0;
+					}  
+					
+				case 76 : 
+					{
+						
+						printf("-- ============================\n");
+						printf("--      Set Debounce Div       \n");	
+						printf("-- ============================\n");
+						
+						printf(" Div_GROUP1_GROUP0 value ? : 0x");
+						if ((ret_code=scanf("%2hhx", &data_read[0]))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};	
+						printf(" Div_GROUP3_GROUP2 value ? : 0x");
+						if ((ret_code=scanf("%2hhx", &data_read[1]))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};	
+						printf(" Div_GROUP5_GROUP4 value ? : 0x");
+						if ((ret_code=scanf("%2hhx", &data_read[2]))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+						printf(" Div_GROUP7_GROUP6 value ? : 0x");
+						if ((ret_code=scanf("%2hhx", &data_read[3]))!=1)
+						{
+							printf("function read error %d\n",ret_code);
+						};
+						data_write[0] = data_read[0];//0xff;  	
+						data_write[1] = data_read[1];//0xff;  	
+						data_write[2] = data_read[2];//0xff;   	
+						data_write[3] = data_read[3];//0xff;  		
+						IOWr(pcie_bar_io[0] + 0x38, data_write, 1, 1, 0, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x39, data_write, 1, 1, 1, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3A, data_write, 1, 1, 2, NO_PRINT_VALUES); 
+						IOWr(pcie_bar_io[0] + 0x3B, data_write, 1, 1, 3, NO_PRINT_VALUES); 
+						
+						wait_to_continue();
+						break;
+						return 0;
 					}  	
+					
+				case 77 : 
+					{
+						
+						printf("-- ============================\n");
+						printf("--     Check Debounce Div      \n");	
+						printf("-- ============================\n");
+							
+						IORd(pcie_bar_io[0] + 0x38, data_read, 4, 1, NO_PRINT_VALUES);    
+						//printf("\n Got Div_GROUP0_GROUP1  = 0x%2.2x.%2.2x.%2.2x.%2.2x",data_read[3]&0xff,data_read[2]&0xff,data_read[1]&0xff,data_read[0]&0xff); 
+						printf("\n Got Div_GROUP1_GROUP0  = 0x%2.2x",data_read[0]&0xff); 
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}  		
 	
 					
 					
