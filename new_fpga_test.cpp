@@ -176,6 +176,8 @@ using namespace std::chrono;
 #define DATA_SIZE_PER_PAGE 4096 // 4096 byte di dati
 #define READ_BUFFER_SIZE 4096
 
+#define NUM_PAGES_TO_WRITE 128
+
 /*===========================
 ===== DEBUG Parameters =====*/
 #define STATUS_CMD			0x40
@@ -1371,6 +1373,44 @@ uint32_t *pcie_bar_size_test  = NULL;
 			  return 0;
 			}
 		
+
+		
+	/* 
+	 * ===  FUNCTION  ======================================================================
+	 *         Name:  fill_buffer
+	 *  Description:  Fill the buffer with data based on the mode
+	 * =====================================================================================
+	 */	
+		void fill_buffer(uint8_t *buffer, size_t size, uint32_t mode) {
+			for (size_t i = 0; i < size; i++) {
+				if (mode == 0)         // Valore fisso
+					buffer[i] = 0xAA;
+				else if (mode == 1)    // Valori consecutivi
+					buffer[i] = (uint8_t)(i % 256);
+				else if (mode == 2)    // Valori randomici
+					buffer[i] = (uint8_t)(rand() % 256);
+			}
+		}
+
+	/* 
+	 * ===  FUNCTION  ======================================================================
+	 *         Name:  write_multiple_nand_pages
+	 *  Description:  Write  nand pages
+	 *  Requiremets:  
+	 *				  page  	 = total number of pages
+	 *                start_page = first page
+	 * =====================================================================================
+	 */	
+
+		// Esempio di funzione di scrittura multipla (da adattare alla tua logica di scrittura)
+		void write_multiple_nand_pages(uint8_t *writeBuffer, uint32_t mode) {
+			for (int page = 0; page < NUM_PAGES_TO_WRITE; page++) {
+				fill_buffer(writeBuffer, DATA_SIZE_PER_PAGE, mode);
+				// Qui va la tua funzione reale di scrittura su NAND Flash, es:
+				// page_program(address, writeBuffer, PAGE_SIZE, ...);
+				printf("Scritta pagina %d\n", page);
+			}
+		}
 /*================================================
 ==================================================
 ==================== MAIN ========================
@@ -3921,7 +3961,8 @@ int main(int argc, char **argv)
 						printf("--   (5) Read Page              	\n");
 						printf("--   (6) Block Erase              	\n");
 						printf("--   (7) All Page Read             	\n");
-						printf("-- =================================\n");
+						printf("--   (8) Scrivi  pagine consecutive\n", NUM_PAGES_TO_WRITE);
+                        printf("-- =================================\n");
 						
 						
 						printf("Selection [0..15] ? : ");
@@ -4457,7 +4498,24 @@ int main(int argc, char **argv)
 									printf("\n--- FINE LETTURA DI TUTTA LA MEMORIA ---\n");
 									
 								break;
-								}  
+								} 
+							case 8:
+								{
+									// Qui puoi chiamare la funzione per scrivere N pagine
+									// Esempio:
+									// write_multiple_nand_pages(writeBuffer, mode);
+
+									// Puoi chiedere all'utente il tipo di dati (fisso, consecutivo, random)
+									uint32_t mode = 1;
+									printf("Tipo dati da scrivere? [0=fisso, 1=consecutivo, 2=random]: ");
+									if ((ret_code=scanf("%d", &mode))!=1) {
+										printf("function read error %d\n",ret_code);
+									}
+
+									write_multiple_nand_pages(writeBuffer, mode);
+
+									break;
+								}
 								
 							default:
 								{	
@@ -5252,6 +5310,11 @@ int main(int argc, char **argv)
 						MWr32(mem_ctrl + 0xAB, data_write, 1, 1, NO_PRINT_VALUES); 
 						MRd32(mem_ctrl + 0xAB, data_read, 1, 1, NO_PRINT_VALUES); 
 						
+						//printf("** Set AES MODE  **\n");
+						data_write[0]=0x00;
+						MWr32(mem_ctrl + 0xA0, data_write, 1, 1, NO_PRINT_VALUES); 
+						MRd32(mem_ctrl + 0xA0, data_read, 1, 1, 1); 
+												
 						printf("\n AES mode register: %2.2x",data_read[0]);
 						MRd32(mem_ctrl + 0xA0, data_read, 1, 1, 1); 
 						
