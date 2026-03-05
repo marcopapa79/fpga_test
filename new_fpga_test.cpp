@@ -1421,11 +1421,11 @@ uint32_t *pcie_bar_size_test  = NULL;
      *                data_read     = (buffer data read num_pages × DATA_SIZE_PER_PAGE)
 	 *				  start page 	= first page to read
 	 *                num_pages 	= total number of pages to read
-	 *                mem_ctrl      = memory controller base address
+	 *                mem_addr      = memory controller base address
 	 * =====================================================================================
 	 */
 // Funzione per leggere N pagine consecutive
-void Nand_read_pages(uint8_t * start_addr_v, uint32_t num_pages, uint32_t *mem_ctrl, uint8_t *data_read) {
+void Nand_read_pages(uint8_t * start_addr_v, uint32_t num_pages, uint8_t *mem_addr, uint8_t *data_read) {
 	uint8_t *wr_data = (uint8_t*)calloc(4, sizeof(uint8_t));
 	uint8_t flashSR[4];
 	uint8_t fifoSTATUS[4];
@@ -1436,44 +1436,44 @@ void Nand_read_pages(uint8_t * start_addr_v, uint32_t num_pages, uint32_t *mem_c
 		wr_data[0] = (next_addr >> 16) & 0xFF;
 		wr_data[1] = (next_addr >> 8) & 0xFF;
 		wr_data[2] = next_addr & 0xFF;
-		MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
-		MWr32(mem_ctrl + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES);
-		MWr32(mem_ctrl + 0x46, &wr_data[2], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_addr + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_addr + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_addr + 0x46, &wr_data[2], 1, 1, NO_PRINT_VALUES);
 		usleep(10*1000);
 		wr_data[0] = 0x00;
 		wr_data[1] = 0x04; // read page
-		MWr32(mem_ctrl + 0x41, &wr_data[1], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_addr + 0x41, &wr_data[1], 1, 1, NO_PRINT_VALUES);
 		usleep(10*1000);
 		wr_data[0] = 0x00;
 		wr_data[1] = 0x00;
 		wr_data[2] = 0x00;
-		MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
-		MWr32(mem_ctrl + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES);
-		MWr32(mem_ctrl + 0x46, &wr_data[2], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_addr + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_addr + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_addr + 0x46, &wr_data[2], 1, 1, NO_PRINT_VALUES);
 		do {
 			wr_data[0] = 0xC0;
-			MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
+			MWr32(mem_addr + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
 			usleep(10*1000);
 			wr_data[0] = 0x04;
-			MWr32(mem_ctrl + 0x40, &wr_data[0], 1, 1, NO_PRINT_VALUES);
+			MWr32(mem_addr + 0x40, &wr_data[0], 1, 1, NO_PRINT_VALUES);
 			usleep(10*1000);
-			MRd32(mem_ctrl + 0x40, flashSR, 4, 4, NO_PRINT_VALUES);
+			MRd32(mem_addr + 0x40, flashSR, 4, 4, NO_PRINT_VALUES);
 		} while ((flashSR[2] & 0x01));
 		wr_data[0] = 0x00;
 		wr_data[1] = 0x00;
-		MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
-		MWr32(mem_ctrl + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_addr + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_addr + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES);
 		wr_data[0] = 0x20; // Read From Cache
-		MWr32(mem_ctrl + 0x40, &wr_data[0], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_addr + 0x40, &wr_data[0], 1, 1, NO_PRINT_VALUES);
 		usleep(10*1000);
 		// Lettura dati nella posizione corretta del buffer
 		uint32_t offset = i * DATA_SIZE_PER_PAGE;
 		uint32_t j = 0;
 		while (j < DATA_SIZE_PER_PAGE) {
-			MRd32(mem_ctrl+ 0x44, &data_read[offset + j], 4, 4, NO_PRINT_VALUES);
+			MRd32(mem_addr+ 0x44, &data_read[offset + j], 4, 4, NO_PRINT_VALUES);
 			j += 4;
 		}
-		MRd32(mem_ctrl+ 0x4C, fifoSTATUS, 4, 4, NO_PRINT_VALUES);
+		MRd32(mem_addr+ 0x4C, fifoSTATUS, 4, 4, NO_PRINT_VALUES);
 	}
 	free(wr_data);
 }
