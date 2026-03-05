@@ -177,6 +177,7 @@ using namespace std::chrono;
 #define READ_BUFFER_SIZE 4096
 
 #define NUM_PAGES_TO_WRITE 128
+#define NUM_PAGES_TO_READ 128
 
 /*===========================
 ===== DEBUG Parameters =====*/
@@ -688,7 +689,6 @@ uint32_t *pcie_bar_size_test  = NULL;
 			IOWr(pcie_bar_io[0] + spi_offset + 0x02, data_wr, 1, 1, 0, NO_PRINT_VALUES); // CMD_WRITE_ENA CMD
 			wait_fifo_empty(spi_offset);
 			IORd(pcie_bar_io[0] + spi_offset + 0x02, data_rd, 1, 1, NO_PRINT_VALUES);  
-			f_cs_disable(spi_offset, setup_spi);
 				
 			free(data_wr); 
 			free(data_rd); 
@@ -1411,6 +1411,73 @@ uint32_t *pcie_bar_size_test  = NULL;
 				printf("Scritta pagina %d\n", page);
 			}
 		}
+	/* 
+	 * ===  FUNCTION  ======================================================================
+	 *         Name:  Nand_read_pages
+	 *  Description:  Read multiple pages
+	 *  Requiremets:  
+	 *                start_addr_v  = (3 bytes uint8_t) 24-bit read address
+	 *                
+     *                data_read     = (buffer data read num_pages × DATA_SIZE_PER_PAGE)
+	 *				  start page 	= first page to read
+	 *                num_pages 	= total number of pages to read
+	 *                mem_ctrl      = memory controller base address
+	 * =====================================================================================
+	 */
+// Funzione per leggere N pagine consecutive
+void Nand_read_pages(uint8_t * start_addr_v, uint32_t num_pages, uint32_t *mem_ctrl, uint8_t *data_read) {
+	uint8_t *wr_data = (uint8_t*)calloc(4, sizeof(uint8_t));
+	uint8_t flashSR[4];
+	uint8_t fifoSTATUS[4];
+	for (uint32_t i = 0; i < num_pages; ++i) {
+		// Calcola indirizzo pagina corrente
+		uint32_t next_addr = ((uint32_t)start_addr_v[0] << 16) | ((uint32_t)start_addr_v[1] << 8) | (uint32_t)start_addr_v[2];
+		next_addr += i;
+		wr_data[0] = (next_addr >> 16) & 0xFF;
+		wr_data[1] = (next_addr >> 8) & 0xFF;
+		wr_data[2] = next_addr & 0xFF;
+		MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_ctrl + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_ctrl + 0x46, &wr_data[2], 1, 1, NO_PRINT_VALUES);
+		usleep(10*1000);
+		wr_data[0] = 0x00;
+		wr_data[1] = 0x04; // read page
+		MWr32(mem_ctrl + 0x41, &wr_data[1], 1, 1, NO_PRINT_VALUES);
+		usleep(10*1000);
+		wr_data[0] = 0x00;
+		wr_data[1] = 0x00;
+		wr_data[2] = 0x00;
+		MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_ctrl + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_ctrl + 0x46, &wr_data[2], 1, 1, NO_PRINT_VALUES);
+		do {
+			wr_data[0] = 0xC0;
+			MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
+			usleep(10*1000);
+			wr_data[0] = 0x04;
+			MWr32(mem_ctrl + 0x40, &wr_data[0], 1, 1, NO_PRINT_VALUES);
+			usleep(10*1000);
+			MRd32(mem_ctrl + 0x40, flashSR, 4, 4, NO_PRINT_VALUES);
+		} while ((flashSR[2] & 0x01));
+		wr_data[0] = 0x00;
+		wr_data[1] = 0x00;
+		MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_ctrl + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES);
+		wr_data[0] = 0x20; // Read From Cache
+		MWr32(mem_ctrl + 0x40, &wr_data[0], 1, 1, NO_PRINT_VALUES);
+		usleep(10*1000);
+		// Lettura dati nella posizione corretta del buffer
+		uint32_t offset = i * DATA_SIZE_PER_PAGE;
+		uint32_t j = 0;
+		while (j < DATA_SIZE_PER_PAGE) {
+			MRd32(mem_ctrl+ 0x44, &data_read[offset + j], 4, 4, NO_PRINT_VALUES);
+			j += 4;
+		}
+		MRd32(mem_ctrl+ 0x4C, fifoSTATUS, 4, 4, NO_PRINT_VALUES);
+	}
+	free(wr_data);
+}
+
 /*================================================
 ==================================================
 ==================== MAIN ========================
@@ -3961,7 +4028,9 @@ int main(int argc, char **argv)
 						printf("--   (5) Read Page              	\n");
 						printf("--   (6) Block Erase              	\n");
 						printf("--   (7) All Page Read             	\n");
-						printf("--   (8) Scrivi  pagine consecutive\n", NUM_PAGES_TO_WRITE);
+						printf("--   (8) Scrivi %d pagine consecutive\n", NUM_PAGES_TO_WRITE);
+						printf("--   (9) Leggi N pagine consecutive\n");
+						printf("--   (9) Leggi %d pagine consecutive\n", NUM_PAGES_TO_READ);
                         printf("-- =================================\n");
 						
 						
@@ -4516,6 +4585,24 @@ int main(int argc, char **argv)
 
 									break;
 								}
+							case 9:
+								{
+									uint8_t start_addr_v[3];
+									uint32_t num_page;
+									printf("Indirizzo di partenza (3 byte esadecimali, es. 00 10 20): ");
+									scanf("%2hhx %2hhx %2hhx", &start_addr_v[0], &start_addr_v[1], &start_addr_v[2]);
+									printf("Quante pagine vuoi leggere? ");
+									scanf("%u", &num_page);
+									uint8_t *data_read = (uint8_t*)calloc(num_page * DATA_SIZE_PER_PAGE, sizeof(uint8_t));
+									if (!data_read) {
+										printf("Errore allocazione buffer\n");
+										break;
+									}
+									Nand_read_pages(start_addr_v, num_page, mem_ctrl, data_read);
+									printf("Lettura completata.\n");
+									free(data_read);
+									break;
+								}
 								
 							default:
 								{	
@@ -4625,6 +4712,7 @@ int main(int argc, char **argv)
 								close(rom_file); 
 								if (w_size != size ) 
 								{
+								// Funzione per leggere N pagine consecutive
 									printf("FAILURE: memory chip protection error\n");											
 								}	
 								wait_to_continue();									
