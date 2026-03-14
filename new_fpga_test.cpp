@@ -179,6 +179,10 @@ using namespace std::chrono;
 #define NUM_PAGES_TO_WRITE 128
 #define NUM_PAGES_TO_READ 128
 
+#define FLASH_NOT_BUSY 0
+#define FLASH_WEL_DONE 1
+
+
 /*===========================
 ===== DEBUG Parameters =====*/
 #define STATUS_CMD			0x40
@@ -1372,7 +1376,53 @@ uint32_t *pcie_bar_size_test  = NULL;
 
 			  return 0;
 			}
-		
+			
+	/* 
+	 * ===  FUNCTION  ======================================================================
+	 *         Name:  check_flash_status
+	 *  Description:  control flash status register and wait until flash is not busy, then print the status of the flash
+	 *  Requiremets:  
+	 * 				
+	 *                mem_addr      = memory controller base address
+	 *                flashSR 		= flash status register
+	 *                debug_print 	= flag to enable debug printing
+	 * =====================================================================================
+	 */	
+			void check_flash_status(uint8_t *flashSR, uint8_t *mem_addr, unsigned int debug_print, uint32_t check_type) 
+			{
+				uint8_t *writeCTRL = (uint8_t*)calloc(4, sizeof(uint8_t));
+				if (check_type == FLASH_NOT_BUSY) {
+					// Attendi che la flash NON sia busy (bit 0 = 0)
+					do { 
+						writeCTRL[0] = 0xC0;
+						MWr32(mem_addr + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+						usleep(10*1000);
+						writeCTRL[0] = 0x04;
+						MWr32(mem_addr + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+						usleep(10*1000);
+						MRd32(mem_addr + 0x40, flashSR, 4, 4, NO_PRINT_VALUES); 
+					} while ((flashSR[2] & 0x01));
+				} else if (check_type == FLASH_WEL_DONE) {
+					// Attendi che WEL sia done (bit 1 = 1)
+					do { 
+						writeCTRL[0] = 0xC0;
+						MWr32(mem_addr + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+						usleep(10*1000);
+						writeCTRL[0] = 0x04;
+						MWr32(mem_addr + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
+						usleep(10*1000);
+						MRd32(mem_addr + 0x40, flashSR, 4, 4, NO_PRINT_VALUES); 
+					} while (!(flashSR[2] & 0x02));
+				}
+				if (debug_print) {
+					printf("\n PROGRAM FAIL\t= %d", ((flashSR[2]>>3)&0x01));	
+					printf("\n ERASE FAIL\t= %d", ((flashSR[2]>>2)&0x01));	
+					printf("\n WRITE ENABLE LATCH\t= %d", ((flashSR[2]>>1)&0x01));	
+					printf("\n FLASH BUSY\t= %d", (flashSR[2]&0x01));	
+					printf("\n ");
+				}
+				free(writeCTRL);
+			}
 
 		
 	/* 
@@ -1401,15 +1451,83 @@ uint32_t *pcie_bar_size_test  = NULL;
 	 *                start_page = first page
 	 * =====================================================================================
 	 */	
-
-		// Esempio di funzione di scrittura multipla (da adattare alla tua logica di scrittura)
 		void write_multiple_nand_pages(uint8_t *writeBuffer, uint32_t mode) {
-			for (int page = 0; page < NUM_PAGES_TO_WRITE; page++) {
-				fill_buffer(writeBuffer, DATA_SIZE_PER_PAGE, mode);
-				// Qui va la tua funzione reale di scrittura su NAND Flash, es:
-				// page_program(address, writeBuffer, PAGE_SIZE, ...);
-				printf("Scritta pagina %d\n", page);
-			}
+    		for (int page = 0; page < NUM_PAGES_TO_WRITE; page++) {
+        		fill_buffer(writeBuffer, DATA_SIZE_PER_PAGE, mode);
+        		write_data_page(writeBuffer, page);
+    			}
+		}
+
+	/* 
+	 * ===  FUNCTION  ======================================================================
+	 *         Name:  write_data_page
+	 *  Description:  Write  nand pages
+	 *  Requiremets:  
+	 *				  page  	 = total number of pages
+	 *                start_page = first page
+	 * =====================================================================================
+	 */	
+		void write_data_page(uint8_t *writeBuffer, int page) {
+			uint8_t *wr_data = (uint8_t*)calloc(4, sizeof(uint8_t));
+			uint8_t *rd_data = (uint8_t*)calloc(4, sizeof(uint8_t));
+
+			// -- WEL --
+			wr_data[0] = 0x40;
+			MWr32(mem_ctrl + 0x40, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
+			usleep(10*1000);
+
+			// Check WEL done
+			do { 
+				wr_data[0] = 0xC0; // address c0
+				MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
+				usleep(10*1000);
+				wr_data[0] = 0x04; // get feature
+				MWr32(mem_ctrl + 0x40, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
+				usleep(10*1000);
+				MRd32(mem_ctrl + 0x40, rd_data, 4, 4, NO_PRINT_VALUES); 
+			} while (!(rd_data[2] & 0x02));	
+
+			// Program Load x4
+			wr_data[0] = 0x00; // page address 0x0000
+			wr_data[1] = 0x00;
+			MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
+			MWr32(mem_ctrl + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES); 
+			usleep(10*1000);
+			wr_data[0] = 0x00;
+			wr_data[1] = 0x01; // program load x4
+			MWr32(mem_ctrl + 0x41, &wr_data[1], 1, 1, NO_PRINT_VALUES); 
+			usleep(10*1000);
+			wr_data[0] = 0x00;
+			wr_data[1] = 0x00;
+			MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
+			MWr32(mem_ctrl + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES); 
+
+			// Program Execute
+			wr_data[0] = 0x00;
+			wr_data[1] = 0x02; // Program Execute
+			MWr32(mem_ctrl + 0x41, &wr_data[1], 1, 1, NO_PRINT_VALUES);									
+			usleep(10*1000); 
+
+			wr_data[0] = 0x00;
+			wr_data[1] = 0x00;
+			MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
+			MWr32(mem_ctrl + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES); 
+
+			// Check FLASH no busy
+			do { 
+				wr_data[0] = 0xC0; // address c0
+				MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
+				usleep(10*1000);
+				wr_data[0] = 0x04; // get feature
+				MWr32(mem_ctrl + 0x40, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
+				usleep(10*1000);
+				MRd32(mem_ctrl + 0x40, rd_data, 4, 4, 1); //NO_PRINT_VALUES
+			} while ((rd_data[2] & 0x01));	
+
+			printf("Scritta pagina %d\n", page);
+
+			free(wr_data);
+			free(rd_data);
 		}
 	/* 
 	 * ===  FUNCTION  ======================================================================
@@ -1425,57 +1543,106 @@ uint32_t *pcie_bar_size_test  = NULL;
 	 * =====================================================================================
 	 */
 // Funzione per leggere N pagine consecutive
-void Nand_read_pages(uint8_t * start_addr_v, uint32_t num_pages, uint8_t *mem_addr, uint8_t *data_read) {
+void Nand_read_pages(uint8_t * start_addr_v, uint32_t num_pages, uint8_t *mem_addr, uint8_t *data_read, unsigned int debug_print) 
+{
 	uint8_t *wr_data = (uint8_t*)calloc(4, sizeof(uint8_t));
-	uint8_t flashSR[4];
-	uint8_t fifoSTATUS[4];
+	//uint8_t flashSR[4];
+	uint8_t *rd_data = (uint8_t*)calloc(4, sizeof(uint8_t));
+	// Loop Esterno: Page	
 	for (uint32_t i = 0; i < num_pages; ++i) {
 		// Calcola indirizzo pagina corrente
 		uint32_t next_addr = ((uint32_t)start_addr_v[0] << 16) | ((uint32_t)start_addr_v[1] << 8) | (uint32_t)start_addr_v[2];
+		// -----------------------------------------------------------
+		// 1. COMANDO PAGE READ (13h) - Carica la pagina nella cache
+		// -----------------------------------------------------------
+		if (debug_print==1) {
+			uint32_t full_address = ((uint32_t)wr_data[0] << 16) | ((uint32_t)wr_data[1] << 8) | (uint32_t)wr_data[2];
+			uint32_t block = full_address >> 6;
+			uint32_t page = full_address & 0x3F;
+			printf("\n--> Leggo Blocco: %d, Pagina: %d (Addr: %02X %02X %02X)\n", block, page, wr_data[2], wr_data[1], wr_data[0]);
+		}
+		
 		next_addr += i;
-		wr_data[0] = (next_addr >> 16) & 0xFF;
+		// Address Byte 0 (LSB)
+		wr_data[0] = next_addr & 0xFF;
+		MWr32(mem_addr + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);  
+		// Address Byte 1 (middle)
 		wr_data[1] = (next_addr >> 8) & 0xFF;
-		wr_data[2] = next_addr & 0xFF;
-		MWr32(mem_addr + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
-		MWr32(mem_addr + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES);
-		MWr32(mem_addr + 0x46, &wr_data[2], 1, 1, NO_PRINT_VALUES);
-		usleep(10*1000);
+		MWr32(mem_addr + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES); 
+		// Address Byte 2 (MSB)
+		wr_data[2] = (next_addr >> 16) & 0xFF;
+		MWr32(mem_addr + 0x46, &wr_data[2], 1, 1, NO_PRINT_VALUES);    
+		usleep(1*1000);
 		wr_data[0] = 0x00;
 		wr_data[1] = 0x04; // read page
 		MWr32(mem_addr + 0x41, &wr_data[1], 1, 1, NO_PRINT_VALUES);
-		usleep(10*1000);
+		usleep(1*1000);
 		wr_data[0] = 0x00;
 		wr_data[1] = 0x00;
 		wr_data[2] = 0x00;
 		MWr32(mem_addr + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
 		MWr32(mem_addr + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES);
 		MWr32(mem_addr + 0x46, &wr_data[2], 1, 1, NO_PRINT_VALUES);
+		// -----------------------------------------------------------
+		// 2. POLLING OIP (GET FEATURE 0Fh) - Attende che la cache sia pronta
+		// -----------------------------------------------------------
+		// check flash not busy
 		do {
-			wr_data[0] = 0xC0;
+			wr_data[0] = 0xC0;  	// address c0
 			MWr32(mem_addr + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
-			usleep(10*1000);
-			wr_data[0] = 0x04;
+			//usleep(1*1000);
+			wr_data[0] = 0x04;      // get feature
 			MWr32(mem_addr + 0x40, &wr_data[0], 1, 1, NO_PRINT_VALUES);
-			usleep(10*1000);
-			MRd32(mem_addr + 0x40, flashSR, 4, 4, NO_PRINT_VALUES);
-		} while ((flashSR[2] & 0x01));
+			usleep(0.1*1000);
+			MRd32(mem_addr + 0x40, rd_data, 4, 4, NO_PRINT_VALUES);
+		} while ((rd_data[2] & 0x01));
+		
+		// -----------------------------------------------------------
+		// 3. READ FROM CACHE x4 (6Bh) - Lettura dei dati
+		// ---
+		// Invia l'indirizzo di colonna (Column Address) 2 byte: 0x0000
 		wr_data[0] = 0x00;
 		wr_data[1] = 0x00;
-		MWr32(mem_addr + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
+		MWr32(mem_addr + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);   // Colonna 0 (byte 0)
 		MWr32(mem_addr + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES);
 		wr_data[0] = 0x20; // Read From Cache
 		MWr32(mem_addr + 0x40, &wr_data[0], 1, 1, NO_PRINT_VALUES);
-		usleep(10*1000);
+		usleep(1*1000);
+		// -----------------------------------------------------------
+		// 4. Trasferimento Dati dal FIFO al Buffer del Micro (Lettura di 4096 byte
+		// -----------------------------------------------------------
 		// Lettura dati nella posizione corretta del buffer
 		uint32_t offset = i * DATA_SIZE_PER_PAGE;
 		uint32_t j = 0;
+		if (debug_print==1) 
+			{
+				printf("\n");
+				printf("Read Mem Access Type:  Byte\n");
+				printf("Address (hex)          Data value (hex)\n");
+				printf("                       |          Dword|\n");
+			}
 		while (j < DATA_SIZE_PER_PAGE) {
-			MRd32(mem_addr+ 0x44, &data_read[offset + j], 4, 4, NO_PRINT_VALUES);
+			if (debug_print==1) 
+			{				
+				MRd32(mem_addr+ 0x44, &data_read[offset + j], 4, 4, NO_PRINT_VALUES);
+				printf("%8.8x               |      x%2.2x%2.2x%2.2x%2.2x|\n",((uint64_t)j & 0x003f'ffff),*(data_read+offset+j),*(data_read+offset+j+1),*(data_read+offset+j+2),*(data_read+offset+j+3));
+			}
+			else
+			{
+				MRd32(mem_addr+ 0x44, &data_read[offset + j], 4, 4, NO_PRINT_VALUES);
+			}
+												
 			j += 4;
 		}
-		MRd32(mem_addr+ 0x4C, fifoSTATUS, 4, 4, NO_PRINT_VALUES);
+		if (debug_print==1) 
+			{	
+				MRd32(mem_addr+ 0x4C, rd_data, 4, 4, NO_PRINT_VALUES);
+				printf("\n--> FIFO control RST x%2.2x,\n--> fifo2flash diff pointer x%2.2x,\n--> flash2fifo diff pointer x%2.2x,\n--> high part_f2f x%2.2x \n", (rd_data[0] & 0x0F), (rd_data[1] & 0xFF), (rd_data[2] & 0xFF), (rd_data[3] & 0x0F));
+			}							
 	}
 	free(wr_data);
+	free(rd_data);
+							
 }
 
 /*================================================
@@ -4029,7 +4196,6 @@ int main(int argc, char **argv)
 						printf("--   (6) Block Erase              	\n");
 						printf("--   (7) All Page Read             	\n");
 						printf("--   (8) Scrivi %d pagine consecutive\n", NUM_PAGES_TO_WRITE);
-						printf("--   (9) Leggi N pagine consecutive\n");
 						printf("--   (9) Leggi %d pagine consecutive\n", NUM_PAGES_TO_READ);
                         printf("-- =================================\n");
 						
@@ -4045,46 +4211,15 @@ int main(int argc, char **argv)
 								{			
 									printf("--   Chek FLASH no busy         \n");
 									// Chek FLASH no busy
-									do{ 
-										writeCTRL[0] =0xC0;	// address c0	
-										MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
-										usleep(10*1000);
-										writeCTRL[0] =0x04;	// get feature
-										MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
-										usleep(10*1000);
-											
-										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, NO_PRINT_VALUES); 
-									} while ((flashSR[2] & 0x01));
-								
-									//printf("\n DOUT_TYPE \t= %s", IO_TYPE((data_read[0]>>3)&0x1F)); flashSR[2]
-									printf("\n PROGRAM FAIL\t= %d", ((flashSR[2]>>3)&0x01));	
-									printf("\n ERASE FAIL\t= %d", ((flashSR[2]>>2)&0x01));	
-									printf("\n WRITE ENABLE LATCH\t= %d", ((flashSR[2]>>1)&0x01));	
-									printf("\n FLASH BUSY\t= %d", (flashSR[2]&0x01));	
-									printf("\n ");	
+									check_flash_status(flashSR, mem_ctrl, PRINT_VALUES, FLASH_NOT_BUSY);
 								break;
 								} 
 							case 1:
 								{			
 									//printf("--   Chek FLASH no busy         \n");
 									// Chek FLASH no busy
-									do{ 
-										writeCTRL[0] =0xC0;	// address c0	
-										MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
-										usleep(10*1000);
-										writeCTRL[0] =0x04;	// get feature
-										MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
-										usleep(10*1000);
-											
-										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, NO_PRINT_VALUES); 
-									} while ((flashSR[2] & 0x01));	
-
-									//printf("\n DOUT_TYPE \t= %s", IO_TYPE((data_read[0]>>3)&0x1F)); flashSR[2]
-									printf("\n PROGRAM FAIL\t= %d", ((flashSR[2]>>3)&0x01));	
-									printf("\n ERASE FAIL\t= %d", ((flashSR[2]>>2)&0x01));	
-									printf("\n WRITE ENABLE LATCH\t= %d", ((flashSR[2]>>1)&0x01));	
-									printf("\n FLASH BUSY\t= %d", (flashSR[2]&0x01));	
-									printf("\n ");
+									check_flash_status(flashSR, mem_ctrl, PRINT_VALUES, FLASH_NOT_BUSY);
+								
 									
 									printf("--   Read ID        \n");
 									writeCTRL[0] =0x01;
@@ -4103,21 +4238,7 @@ int main(int argc, char **argv)
 									usleep(10*1000);
 									//printf("--   Chek FLASH WEL done         \n");	
 									// Chek FLASH WEL done
-									do{ 
-										writeCTRL[0] =0xC0;	// address c0	
-										MWr32(mem_ctrl + 0x44, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
-										usleep(10*1000);
-										writeCTRL[0] =0x04;	// get feature
-										MWr32(mem_ctrl + 0x40, &writeCTRL[0], 1, 1, NO_PRINT_VALUES); 
-										usleep(10*1000);
-											
-										MRd32(mem_ctrl + 0x40, flashSR, 4, 4, 1);//NO_PRINT_VALUES); 
-									} while (!(flashSR[2] & 0x02));	
-									printf("\n PROGRAM FAIL\t= %d", ((flashSR[2]>>3)&0x01));	
-									printf("\n ERASE FAIL\t= %d", ((flashSR[2]>>2)&0x01));	
-									printf("\n WRITE ENABLE LATCH\t= %d", ((flashSR[2]>>1)&0x01));	
-									printf("\n FLASH BUSY\t= %d", (flashSR[2]&0x01));	
-									printf("\n ");	
+									check_flash_status(flashSR, mem_ctrl, PRINT_VALUES, FLASH_WEL_DONE);
 								break;
 								} 
 							case 3:
@@ -4480,7 +4601,7 @@ int main(int argc, char **argv)
 									uint16_t block;
 									uint8_t page;
 								
-																	// Loop Esterno: Blocchi (da 0 a 2047)
+									// Loop Esterno: Blocchi (da 0 a 2047)
 									for (block = 0; block < NUM_BLOCKS; block++) {
 										
 										// Loop Interno: Pagine (da 0 a 63)
@@ -4490,9 +4611,9 @@ int main(int argc, char **argv)
 											
 											uint32_t full_address = (block << 6) | page;
 											
-											writeCTRL[0] = (full_address >> 16) & 0xFF; // Address Byte 0 (superiore)
-											writeCTRL[1] = (full_address >> 8) & 0xFF;  // Address Byte 1 (intermedio)
-											writeCTRL[2] = full_address & 0xFF;         // Address Byte 2 (inferiore)
+											writeCTRL[0] = full_address & 0xFF;         // Address Byte 0 (LSB)
+											writeCTRL[1] = (full_address >> 8) & 0xFF;  // Address Byte 1 (middle)
+											writeCTRL[2] = (full_address >> 16) & 0xFF; // Address Byte 2 (MSB)
 											
 											printf("\n--> Leggo Blocco: %d, Pagina: %d (Addr: %02X %02X %02X)\n", block, page, writeCTRL[0], writeCTRL[1], writeCTRL[2]);
 											// -----------------------------------------------------------
@@ -4570,11 +4691,7 @@ int main(int argc, char **argv)
 								} 
 							case 8:
 								{
-									// Qui puoi chiamare la funzione per scrivere N pagine
-									// Esempio:
-									// write_multiple_nand_pages(writeBuffer, mode);
-
-									// Puoi chiedere all'utente il tipo di dati (fisso, consecutivo, random)
+									// Funzione per scrivere N pagine
 									uint32_t mode = 1;
 									printf("Tipo dati da scrivere? [0=fisso, 1=consecutivo, 2=random]: ");
 									if ((ret_code=scanf("%d", &mode))!=1) {
@@ -4589,6 +4706,7 @@ int main(int argc, char **argv)
 								{
 									uint8_t start_addr_v[3];
 									uint32_t num_page;
+									struct timespec t_start, t_end;
 									printf("Indirizzo di partenza (3 byte esadecimali, es. 00 10 20): ");
 									scanf("%2hhx %2hhx %2hhx", &start_addr_v[0], &start_addr_v[1], &start_addr_v[2]);
 									printf("Quante pagine vuoi leggere? ");
@@ -4598,8 +4716,11 @@ int main(int argc, char **argv)
 										printf("Errore allocazione buffer\n");
 										break;
 									}
-									Nand_read_pages(start_addr_v, num_page, mem_ctrl, data_read);
-									printf("Lettura completata.\n");
+									clock_gettime(CLOCK_MONOTONIC, &t_start);
+									Nand_read_pages(start_addr_v, num_page, mem_ctrl, data_read, NO_PRINT_VALUES);//PRINT_VALUES); NO_PRINT_VALUES
+									clock_gettime(CLOCK_MONOTONIC, &t_end);
+									double elapsed = (t_end.tv_sec - t_start.tv_sec) + (t_end.tv_nsec - t_start.tv_nsec) / 1e9;
+									printf("Lettura completata. Tempo impiegato: %.3f secondi\n", elapsed);
 									free(data_read);
 									break;
 								}
