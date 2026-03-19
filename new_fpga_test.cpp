@@ -1032,20 +1032,20 @@ uint32_t *pcie_bar_size_test  = NULL;
 			data_wr[0]= CMD_PAGE_PROGRAM; //0x02;
 			IOWr(pcie_bar_io[0] + spi_offset + 0x02, data_wr, 1, 1, 0, NO_PRINT_VALUES); // CMD_PAGE_PROGRAM 
 			wait_fifo_empty(spi_offset);
-			IORd(pcie_bar_io[0] + spi_offset + 0x02, data_rd, 1, 1, NO_PRINT_VALUES);      
+			//IORd(pcie_bar_io[0] + spi_offset + 0x02, data_rd, 1, 1, NO_PRINT_VALUES);      
 			
 
 			IOWr(pcie_bar_io[0] + spi_offset + 0x02, start_addr_v, 1, 1, 2, NO_PRINT_VALUES); // Address 23..16      
 			wait_fifo_empty(spi_offset);
-			IORd(pcie_bar_io[0] + spi_offset + 0x02, data_rd, 1, 1, NO_PRINT_VALUES);      
+			//IORd(pcie_bar_io[0] + spi_offset + 0x02, data_rd, 1, 1, NO_PRINT_VALUES);      
 			
 			IOWr(pcie_bar_io[0] + spi_offset + 0x02, start_addr_v, 1, 1, 1, NO_PRINT_VALUES); // Address 15..8       
 			wait_fifo_empty(spi_offset);
-			IORd(pcie_bar_io[0] + spi_offset + 0x02, data_rd, 1, 1, NO_PRINT_VALUES);     
+			//IORd(pcie_bar_io[0] + spi_offset + 0x02, data_rd, 1, 1, NO_PRINT_VALUES);     
 			
 			IOWr(pcie_bar_io[0] + spi_offset + 0x02, start_addr_v, 1, 1, 0, NO_PRINT_VALUES); // Address 7..0      
 			wait_fifo_empty(spi_offset);
-			IORd(pcie_bar_io[0] + spi_offset + 0x02, data_rd, 1, 1, NO_PRINT_VALUES);     
+			//IORd(pcie_bar_io[0] + spi_offset + 0x02, data_rd, 1, 1, NO_PRINT_VALUES);     
 			
 
 			for (byten = 0; byten < byte_lenght_v; byten++)
@@ -1053,7 +1053,7 @@ uint32_t *pcie_bar_size_test  = NULL;
 				data_wr[0]=0x00;
 				IOWr(pcie_bar_io[0] + spi_offset + 0x02, data_buffer_v, 1, 1, byten, NO_PRINT_VALUES); // Byte byten     
 				wait_fifo_empty(spi_offset);
-				IORd(pcie_bar_io[0] + spi_offset + 0x02, data_rd, 1, 1, NO_PRINT_VALUES);    
+				//IORd(pcie_bar_io[0] + spi_offset + 0x02, data_rd, 1, 1, NO_PRINT_VALUES);    
 				
 			};	
 			f_cs_disable(spi_offset, setup_spi);
@@ -1444,91 +1444,238 @@ uint32_t *pcie_bar_size_test  = NULL;
 
 	/* 
 	 * ===  FUNCTION  ======================================================================
-	 *         Name:  write_multiple_nand_pages
-	 *  Description:  Write  nand pages
-	 *  Requiremets:  
-	 *				  page  	 = total number of pages
-	 *                start_page = first page
+	 *         Name:  nand_make_row_address
+	 *  Description:  Create the row address for NAND operations
 	 * =====================================================================================
 	 */	
-		void write_multiple_nand_pages(uint8_t *writeBuffer, uint32_t mode) {
-    		for (int page = 0; page < NUM_PAGES_TO_WRITE; page++) {
-        		fill_buffer(writeBuffer, DATA_SIZE_PER_PAGE, mode);
-        		write_data_page(writeBuffer, page);
-    			}
+		uint32_t nand_make_row_address(uint32_t block, uint32_t page_in_block)
+		{
+			return ((block & 0x7FF) << 6) | (page_in_block & 0x3F);
+		}
+	/* 
+	 * ===  FUNCTION  ======================================================================
+	 *         Name:  nand_set_row_address
+	 *  Description:  Set the row address for NAND operations
+	 * =====================================================================================
+	 */	
+
+		void nand_set_row_address(uint8_t *mem_addr, uint32_t row_address)
+		{
+			uint8_t addr0 = (uint8_t)(row_address & 0xFF);
+			uint8_t addr1 = (uint8_t)((row_address >> 8) & 0xFF);
+			uint8_t addr2 = (uint8_t)((row_address >> 16) & 0xFF);
+			MWr32(mem_addr + 0x44, &addr0, 1, 1, NO_PRINT_VALUES);
+			MWr32(mem_addr + 0x45, &addr1, 1, 1, NO_PRINT_VALUES);
+			MWr32(mem_addr + 0x46, &addr2, 1, 1, NO_PRINT_VALUES);
+		}
+
+	/* 
+	 * ===  FUNCTION  ======================================================================
+	 *         Name:  nand_write_enable
+	 *  Description:  Enable write operations for NAND
+	 * =====================================================================================
+	 */	
+		void nand_write_enable(uint8_t *mem_addr, uint8_t *flashSR)
+		{
+			uint8_t cmd = 0x40;
+			MWr32(mem_addr + 0x40, &cmd, 1, 1, NO_PRINT_VALUES);
+			usleep(10*1000);
+			check_flash_status(flashSR, mem_addr, NO_PRINT_VALUES, FLASH_WEL_DONE);
+		}
+
+	/* 
+	 * ===  FUNCTION  ======================================================================
+	 *         Name:  nand_is_bad_block
+	 *  Description:  Check if a NAND block is bad
+	 * =====================================================================================
+	 */	
+		int nand_is_bad_block(uint8_t *mem_addr, uint32_t block, uint8_t *flashSR)
+		{
+			uint8_t cmd;
+			uint8_t marker = 0xFF;
+			uint32_t page;
+
+			for (page = 0; page < 2; page++) {
+				uint32_t row = nand_make_row_address(block, page);
+
+				nand_set_row_address(mem_addr, row);
+				usleep(1*1000);
+				cmd = 0x04; // Page Read
+				MWr32(mem_addr + 0x41, &cmd, 1, 1, NO_PRINT_VALUES);
+				usleep(1*1000);
+				check_flash_status(flashSR, mem_addr, NO_PRINT_VALUES, FLASH_NOT_BUSY);
+
+				// Legge il bad block marker nel primo byte dell'area spare (colonna 4096 = 0x1000).
+				cmd = 0x00;
+				MWr32(mem_addr + 0x44, &cmd, 1, 1, NO_PRINT_VALUES);
+				cmd = 0x10;
+				MWr32(mem_addr + 0x45, &cmd, 1, 1, NO_PRINT_VALUES);
+				cmd = 0x20; // Read From Cache x4
+				MWr32(mem_addr + 0x40, &cmd, 1, 1, NO_PRINT_VALUES);
+				usleep(1*1000);
+
+				MRd32(mem_addr + 0x44, &marker, 1, 1, NO_PRINT_VALUES);
+				if (marker != 0xFF) {
+					return 1;
+				}
+			}
+
+			return 0;
+		}
+
+	/* 
+	 * ===  FUNCTION  ======================================================================
+	 *         Name:  nand_erase_block
+	 *  Description:  Erase a NAND block
+	 * =====================================================================================
+	 */	
+		int nand_erase_block(uint8_t *mem_addr, uint32_t block, uint8_t *flashSR, unsigned int debug_print)
+		{
+			uint8_t cmd = 0x10; // Block Erase
+			uint32_t row = nand_make_row_address(block, 0);
+
+			nand_write_enable(mem_addr, flashSR);
+			nand_set_row_address(mem_addr, row);
+			usleep(1*1000);
+
+			MWr32(mem_addr + 0x40, &cmd, 1, 1, NO_PRINT_VALUES);
+			usleep(10*1000);
+			check_flash_status(flashSR, mem_addr, NO_PRINT_VALUES, FLASH_NOT_BUSY);
+
+			if ((flashSR[2] >> 2) & 0x01) {
+				if (debug_print) {
+					printf("\nERASE FAIL su blocco %u", block);
+				}
+				return -1;
+			}
+
+			return 0;
 		}
 
 	/* 
 	 * ===  FUNCTION  ======================================================================
 	 *         Name:  write_data_page
 	 *  Description:  Write  nand pages
-	 *  Requiremets:  
+	 *  Requiremets:  	 * 
+	 *                mem_addr      = memory controller base address
 	 *				  page  	 = total number of pages
 	 *                start_page = first page
 	 * =====================================================================================
 	 */	
-		void write_data_page(uint8_t *writeBuffer, int page) {
-			uint8_t *wr_data = (uint8_t*)calloc(4, sizeof(uint8_t));
-			uint8_t *rd_data = (uint8_t*)calloc(4, sizeof(uint8_t));
+		int write_data_page(uint8_t *mem_addr, uint8_t *writeBuffer, uint32_t block, uint32_t page_in_block, uint8_t *flashSR, unsigned int debug_print) 
+		{
+			uint8_t wr_data[4] = {0, 0, 0, 0};
+			uint32_t row = nand_make_row_address(block, page_in_block);
+			uint32_t i;
 
-			// -- WEL --
-			wr_data[0] = 0x40;
-			MWr32(mem_ctrl + 0x40, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
-			usleep(10*1000);
+			for (i = 0; i < DATA_SIZE_PER_PAGE; i += 4) {
+				MWr32(mem_addr + 0x48, &writeBuffer[i], 4, 4, NO_PRINT_VALUES);
+			}
 
-			// Check WEL done
-			do { 
-				wr_data[0] = 0xC0; // address c0
-				MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
-				usleep(10*1000);
-				wr_data[0] = 0x04; // get feature
-				MWr32(mem_ctrl + 0x40, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
-				usleep(10*1000);
-				MRd32(mem_ctrl + 0x40, rd_data, 4, 4, NO_PRINT_VALUES); 
-			} while (!(rd_data[2] & 0x02));	
+			nand_write_enable(mem_addr, flashSR);
 
-			// Program Load x4
-			wr_data[0] = 0x00; // page address 0x0000
-			wr_data[1] = 0x00;
-			MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
-			MWr32(mem_ctrl + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES); 
-			usleep(10*1000);
-			wr_data[0] = 0x00;
-			wr_data[1] = 0x01; // program load x4
-			MWr32(mem_ctrl + 0x41, &wr_data[1], 1, 1, NO_PRINT_VALUES); 
-			usleep(10*1000);
+			// Program Load x4 con column address 0x0000.
 			wr_data[0] = 0x00;
 			wr_data[1] = 0x00;
-			MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
-			MWr32(mem_ctrl + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES); 
+			MWr32(mem_addr + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES);
+			MWr32(mem_addr + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES);
+			usleep(1*1000);
+			wr_data[1] = 0x01;
+			MWr32(mem_addr + 0x41, &wr_data[1], 1, 1, NO_PRINT_VALUES);
+			usleep(1*1000);
 
-			// Program Execute
-			wr_data[0] = 0x00;
+			nand_set_row_address(mem_addr, row);
+			usleep(1*1000);
+
 			wr_data[1] = 0x02; // Program Execute
-			MWr32(mem_ctrl + 0x41, &wr_data[1], 1, 1, NO_PRINT_VALUES);									
-			usleep(10*1000); 
+			MWr32(mem_addr + 0x41, &wr_data[1], 1, 1, NO_PRINT_VALUES);
+			usleep(1*1000);
 
-			wr_data[0] = 0x00;
-			wr_data[1] = 0x00;
-			MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
-			MWr32(mem_ctrl + 0x45, &wr_data[1], 1, 1, NO_PRINT_VALUES); 
+			check_flash_status(flashSR, mem_addr, NO_PRINT_VALUES, FLASH_NOT_BUSY);
+			if ((flashSR[2] >> 3) & 0x01) {
+				if (debug_print) {
+					printf("\nPROGRAM FAIL su blocco %u pagina %u", block, page_in_block);
+				}
+				return -1;
+			}
 
-			// Check FLASH no busy
-			do { 
-				wr_data[0] = 0xC0; // address c0
-				MWr32(mem_ctrl + 0x44, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
-				usleep(10*1000);
-				wr_data[0] = 0x04; // get feature
-				MWr32(mem_ctrl + 0x40, &wr_data[0], 1, 1, NO_PRINT_VALUES); 
-				usleep(10*1000);
-				MRd32(mem_ctrl + 0x40, rd_data, 4, 4, 1); //NO_PRINT_VALUES
-			} while ((rd_data[2] & 0x01));	
+			if (debug_print) {
+				printf("Scritta Blocco %u Pagina %u (Row 0x%06X)\n", block, page_in_block, row);
+			}
 
-			printf("Scritta pagina %d\n", page);
-
-			free(wr_data);
-			free(rd_data);
+			return 0;
 		}
+
+		void write_data_nand(uint8_t *mem_addr, uint32_t target_block, uint32_t start_page_in_block, uint32_t num_pages, uint8_t *writeBuffer, uint32_t mode, unsigned int debug_print)
+		{
+			uint8_t flashSR[4] = {0, 0, 0, 0};
+			uint32_t current_block;
+			uint32_t current_page;
+			uint32_t pages_left = num_pages;
+
+			if (num_pages == 0) {
+				printf("Nessuna pagina da scrivere.\n");
+				return;
+			}
+
+			current_block = target_block + (start_page_in_block / PAGES_PER_BLOCK);
+			current_page = start_page_in_block % PAGES_PER_BLOCK;
+
+			while (pages_left > 0) {
+				if (current_block >= NUM_BLOCKS) {
+					printf("Errore: spazio NAND terminato durante la scrittura.\n");
+					return;
+				}
+
+				while ((current_block < NUM_BLOCKS) && nand_is_bad_block(mem_addr, current_block, flashSR)) {
+					printf("Blocco %u marcato BAD, salto al successivo.\n", current_block);
+					current_block++;
+					current_page = 0;
+				}
+
+				if (current_block >= NUM_BLOCKS) {
+					printf("Errore: nessun blocco valido disponibile.\n");
+					return;
+				}
+
+				if (nand_erase_block(mem_addr, current_block, flashSR, debug_print) != 0) {
+					printf("Errore: erase fallito su blocco %u.\n", current_block);
+					return;
+				}
+
+				while ((current_page < PAGES_PER_BLOCK) && (pages_left > 0)) {
+					fill_buffer(writeBuffer, DATA_SIZE_PER_PAGE, mode);
+					if (write_data_page(mem_addr, writeBuffer, current_block, current_page, flashSR, debug_print) != 0) {
+						printf("Errore: program fallito su blocco %u pagina %u.\n", current_block, current_page);
+						return;
+					}
+					current_page++;
+					pages_left--;
+				}
+
+				if (current_page >= PAGES_PER_BLOCK) {
+					current_block++;
+					current_page = 0;
+				}
+			}
+
+			printf("Scrittura NAND completata: %u pagine scritte.\n", num_pages);
+		}
+
+	
+	/* 
+	 * ===  FUNCTION  ======================================================================
+	 *         Name:  write_multiple_nand_pages
+	 *  Description:  Write  nand pages
+	 *  Requiremets:  
+	 *                mem_addr      = memory controller base address
+	 * =====================================================================================
+	 */	
+		void write_multiple_nand_pages(uint8_t *mem_addr, uint8_t *writeBuffer, uint32_t mode, uint32_t target_block, uint32_t start_page_in_block, uint32_t num_pages) 
+		{
+			write_data_nand(mem_addr, target_block, start_page_in_block, num_pages, writeBuffer, mode, PRINT_VALUES);
+		}
+
 	/* 
 	 * ===  FUNCTION  ======================================================================
 	 *         Name:  Nand_read_pages
@@ -2060,9 +2207,16 @@ int main(int argc, char **argv)
 						for (int i = 0; i < MAX_KEYS; i++) {
 							( (read_id.id_31_0 == expected_keys[i].id_31_0) & (read_id.id_63_32 == expected_keys[i].id_63_32) & (read_id.id_95_64 == expected_keys[i].id_95_64) & (read_id.id_127_96 == expected_keys[i].id_127_96)  ) ?  vld_id=i : vld_id;  
 						}	
-						
+
 						vld_id == 0 ? printf(" -> ERRORE \n\n") : printf(" -> SUCCESS"); printf(" Chiave Board N° %d\n",++vld_id) ; 
-			
+						MRd32(mem_ctrl + 0xBE, data_read, 1, 1, NO_PRINT_VALUES); 
+						printf("\n AES register BE value\t= 0x%2.2x", data_read[0]&0xff);
+						data_read[0] == 0x0f ? printf(" -> SUCCESS \n\n") : printf(" -> ERRORE");  
+						printf("\n User Mode           \t= %s", USER(data_read[0]&0x01));
+						printf("\n BIOS_Key written    \t= %s", BIOS((data_read[0]>>1)&0x01));
+						printf("\n LP master key ready \t= %s", M_KEY_RDY((data_read[0]>>2)&0x01));
+						printf("\n expanded 17th key   \t= %s", EXP17THKEY((data_read[0]>>3)&0x01));
+						
 			
 							printf("\n ======================================= \t");
 							printf("\n ==      Master Key INJECTED to LP    =="); 
@@ -4195,7 +4349,7 @@ int main(int argc, char **argv)
 						printf("--   (5) Read Page              	\n");
 						printf("--   (6) Block Erase              	\n");
 						printf("--   (7) All Page Read             	\n");
-						printf("--   (8) Scrivi %d pagine consecutive\n", NUM_PAGES_TO_WRITE);
+						printf("--   (8) Scrivi pagine (Block/Page aware)\n");
 						printf("--   (9) Leggi %d pagine consecutive\n", NUM_PAGES_TO_READ);
                         printf("-- =================================\n");
 						
@@ -4691,14 +4845,34 @@ int main(int argc, char **argv)
 								} 
 							case 8:
 								{
-									// Funzione per scrivere N pagine
 									uint32_t mode = 1;
+									uint32_t target_block = 0;
+									uint32_t start_page_in_block = 0;
+									uint32_t num_pages = NUM_PAGES_TO_WRITE;
 									printf("Tipo dati da scrivere? [0=fisso, 1=consecutivo, 2=random]: ");
 									if ((ret_code=scanf("%d", &mode))!=1) {
 										printf("function read error %d\n",ret_code);
 									}
+									printf("Target block [0..%d]: ", (NUM_BLOCKS - 1));
+									if ((ret_code=scanf("%u", &target_block))!=1) {
+										printf("function read error %d\n",ret_code);
+									}
+									printf("Start page in block [0..%d]: ", (PAGES_PER_BLOCK - 1));
+									if ((ret_code=scanf("%u", &start_page_in_block))!=1) {
+										printf("function read error %d\n",ret_code);
+									}
+									printf("Quante pagine vuoi scrivere? ");
+									if ((ret_code=scanf("%u", &num_pages))!=1) {
+										printf("function read error %d\n",ret_code);
+									}
 
-									write_multiple_nand_pages(writeBuffer, mode);
+									if (target_block >= NUM_BLOCKS) {
+										printf("Target block non valido.\n");
+										break;
+									}
+
+									// Funzione per scrivere N pagine con gestione blocchi/bad block.
+									write_multiple_nand_pages(mem_ctrl, writeBuffer, mode, target_block, start_page_in_block, num_pages);
 
 									break;
 								}
@@ -4717,6 +4891,7 @@ int main(int argc, char **argv)
 										break;
 									}
 									clock_gettime(CLOCK_MONOTONIC, &t_start);
+									// Funzione per leggere N pagine
 									Nand_read_pages(start_addr_v, num_page, mem_ctrl, data_read, NO_PRINT_VALUES);//PRINT_VALUES); NO_PRINT_VALUES
 									clock_gettime(CLOCK_MONOTONIC, &t_end);
 									double elapsed = (t_end.tv_sec - t_start.tv_sec) + (t_end.tv_nsec - t_start.tv_nsec) / 1e9;
