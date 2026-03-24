@@ -5777,6 +5777,9 @@ int main(int argc, char **argv)
 						uint32_t iter_fail = 0;
 						uint32_t pass_count = 0;
 						uint32_t fail_count = 0;
+						
+						char keys_passed[256];
+						int keys_passed_idx = 0;
 							
 						
 
@@ -5838,16 +5841,18 @@ int main(int argc, char **argv)
 						for (rep = 0; rep < total_reps; rep++) 
 						{
 							iter_fail = 0;
-							if ((rep % 25) == 0) {printf("Cmd_46 progress: iteration %u/%u\n", rep + 1, total_reps);}
+							if ((rep % 25) == 0) {printf("    ->->->    Cmd_46 progress: iteration %u/%u\n", rep + 1, total_reps);}
 							
 							for (int size_idx = 0; size_idx<AES_SIZE_MODES; size_idx++)
 							{
 								//for (int mode_idx = 0; mode_idx < AES_SIZE_MODES; mode_idx++)
 								for (int mode_idx = 0; mode_idx < AES_SIZE_MODES; mode_idx++)
 								{
+									keys_passed_idx = 0;
+									memset(keys_passed, 0, sizeof(keys_passed));
 									
 									printf("\n============================", AES_TYPE(mode_idx),AES_SZ(size_idx));//
-									printf("\n** AES%s%s **\n\n", AES_TYPE(mode_idx),AES_SZ(size_idx));//
+									printf("\n** AES%s%s **\n", AES_TYPE(mode_idx),AES_SZ(size_idx));//
 									
 									data_write[0]=( (size_idx)+(mode_idx*2) );
 									//printf("** Set AES MODE  **\n");
@@ -5942,13 +5947,15 @@ int main(int argc, char **argv)
 													}
 											if (cmp_err==0) 
 												{ 
-													printf("Key%d verification PASSED\n",key_idx);
+													// Accumulate passing key index
+													keys_passed_idx += snprintf(keys_passed + keys_passed_idx, sizeof(keys_passed) - keys_passed_idx, "%s%u", keys_passed_idx == 0 ? "" : ",", key_idx);
 												}
 											else 
 												{ 
-													printf("Key%d verification FAIL",key_idx);
+													printf("Key%d verification FAIL\n",key_idx);
 													cmp_err=0;
-													
+													iter_fail = 1;
+													break;
 												}
 											
 											#if _DEBUG	
@@ -5976,23 +5983,27 @@ int main(int argc, char **argv)
 											#endif 
 											
 										}	
+										// Print compact key verification summary for this AES mode
+										if (!iter_fail && keys_passed_idx > 0) {
+											printf("Key%s verification PASSED", keys_passed);
+										}
 									}			
 								}			
 
 							if (iter_fail) {
 								fail_count++;
-								printf("Cmd_46 iteration %u/%u: FAIL\n", rep + 1, total_reps);
+								printf("    ->->->    iteration %u/%u: FAIL\n", rep + 1, total_reps);
 								break;
 							} else {
 								pass_count++;
-								printf("Cmd_46 iteration %u/%u: PASS\n", rep + 1, total_reps);
+								printf("    ->->->    iteration %u/%u: PASS\n", rep + 1, total_reps);
 							}
 						}
 
 						if (fail_count == 0) {
-								printf("Cmd_46 PASSED: repeated Cmd_41 verification %u/%u.\n", pass_count, total_reps);
+								printf("    ->->->    Cmd_46 PASSED: repeated Cmd_41 verification %u/%u.\n", pass_count, total_reps);
 							} else {
-								printf("Cmd_46 FAILED: PASS=%u FAIL=%u (stopped at first failing iteration).\n", pass_count, fail_count);
+								printf("    ->->->    Cmd_46 FAILED: PASS=%u FAIL=%u (stopped at first failing iteration).\n", pass_count, fail_count);
 							}
 
 						free(dst_ssl);			
