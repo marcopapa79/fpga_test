@@ -2423,6 +2423,7 @@ int main(int argc, char **argv)
 		printf("Cmd_42: Verify Decrypt Key0..15 with open SSL\n");	
 		printf("Cmd_43: Program Master Key injection\n");
 		printf("Cmd_45: AES reset\n");
+		printf("Cmd_46: Verify Encrypt Key0..15 AES256-CBC x300\n");
 		printf("Cmd_50: RiscV RST\n");
 		printf("Cmd_60: SRAM Write Test from 0 to MAX size in Normal mode (stress test for consumption)\n");
 		printf("Cmd_61: SRAM Write Test from 0 to MAX size in Mirror mode (stress test for consumption)\n");
@@ -5753,6 +5754,259 @@ int main(int argc, char **argv)
 						break;
 						return 0;
 					} 
+
+					case 46:
+						{
+						printf("-- ====================================================\n");
+						printf("-- Repeat Cmd_41 encryption verify (AES128/256 ECB/CBC)\n");		
+						printf("--  			         KEY0..15                      \n");		
+						printf("-- ====================================================\n");
+						
+						
+						uint8_t iv[32] = "\x00\x11\x22\x33\x44\x55\x66\x77\x88\x99\xaa\xbb\xcc\xdd\xee\xff"; 
+						uint8_t open_ssl_key[32] = "\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f";
+  						 
+						uint8_t *dst_ssl = (uint8_t *)malloc(sizeSecsBuffer);
+						uint8_t *src = (uint8_t *)malloc(sizeSecsBuffer);
+						uint8_t *data_enc_key_i = (uint8_t *)malloc(sizeSecsBuffer);	
+						uint32_t cmp_err = 0;
+						
+						
+						const uint32_t total_reps = 300;
+						uint32_t rep;
+						uint32_t iter_fail = 0;
+						uint32_t pass_count = 0;
+						uint32_t fail_count = 0;
+							
+						
+
+
+						aes_size_t aes_size[AES_SIZE_MODES] = { AES_128, AES_256 };
+						aes_mode_t aes_mode[AES_SIZE_MODES] = { AES_ECB, AES_CBC };
+						
+						char key_file_name[]="original_key_m";
+						int32_t key_file;
+						uint32_t size;
+						uint32_t key_idx;
+							
+							if (key_file_name) {
+								key_file = open(key_file_name, O_RDONLY);						
+										
+								if (key_file >= 0) 
+									{					
+										size = read(key_file, key_p, sizeSecsBuffer);
+										if (size == 0)
+										{
+											printf("FAILURE: file  %s. is empty\n", key_file_name);								
+										};
+										close(key_file);
+										
+										//printf("\nPROGRAM DONE\n");									
+										exit=0;	
+									}								
+								else 
+									{			
+										printf("FAILURE: error opening %s. Abort\n", key_file_name);								
+										exit=-1;
+									}
+							}
+							else {
+								printf("FAILURE: invalid original key file name. Abort\n");								
+								exit=-1;
+							}
+						#if _DEBUG	
+							{	
+								for (int j = 0; j<16; j++)
+									{
+									printf("\nla chiave %d è: ",j);	
+									for (int i = (32*j); i<(32*(j+1)); i++)
+										{
+												printf("%2.2x",key_p[i]);	
+										}
+									}
+							}; 
+						#endif 
+						
+						// Write init vectoor for CBC
+						MWr32(mem_ctrl + 0xAC, iv, 4, 4, NO_PRINT_VALUES); 
+						MWr32(mem_ctrl + 0xB0, &iv[4], 4, 4, NO_PRINT_VALUES); 
+						MWr32(mem_ctrl + 0xB4, &iv[8], 4, 4, NO_PRINT_VALUES); 
+						MWr32(mem_ctrl + 0xB8, &iv[12], 4, 4, NO_PRINT_VALUES); 
+						
+											
+						
+						for (rep = 0; rep < total_reps; rep++) 
+						{
+							iter_fail = 0;
+							if ((rep % 25) == 0) {printf("Cmd_46 progress: iteration %u/%u\n", rep + 1, total_reps);}
+							
+							for (int size_idx = 0; size_idx<AES_SIZE_MODES; size_idx++)
+							{
+								//for (int mode_idx = 0; mode_idx < AES_SIZE_MODES; mode_idx++)
+								for (int mode_idx = 0; mode_idx < AES_SIZE_MODES; mode_idx++)
+								{
+									
+									printf("\n============================", AES_TYPE(mode_idx),AES_SZ(size_idx));//
+									printf("\n** AES%s%s **\n\n", AES_TYPE(mode_idx),AES_SZ(size_idx));//
+									
+									data_write[0]=( (size_idx)+(mode_idx*2) );
+									//printf("** Set AES MODE  **\n");
+									MWr32(mem_ctrl + 0xA0, data_write, 1, 1, NO_PRINT_VALUES); 
+									MRd32(mem_ctrl + 0xA0, data_read, 1, 1, NO_PRINT_VALUES); 
+									
+									for (key_idx = 0; key_idx<16; key_idx++)
+										{ 
+									
+											// reset aes and load Init Vector
+											data_write[0]=0x08;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
+											data_write[0]=0x00;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
+											
+											//printf("** Select Key %d **\n", key_idx);
+											data_write[0]=key_idx;
+											MWr32(mem_ctrl + 0xA1, data_write, 1, 1, NO_PRINT_VALUES); 
+											MRd32(mem_ctrl + 0xA1, data_read, 1, 1, NO_PRINT_VALUES); 
+											
+											//printf("** Set Expansion Key command **\n");
+											data_write[0]=0x04;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
+											do{ 
+												MRd32(mem_ctrl + 0x22, data_read, 1, 1, NO_PRINT_VALUES); 
+												usleep(15);
+												} while (!((data_read[0]>>2) & 0x01));
+											data_write[0]=0x00;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
+											//printf("** Expansion Done **  ");
+											
+											//printf("** Set Encrypt command **\n");
+											data_write[0]=0x01;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 
+											
+											// write pattern in internal EBR
+											MWr32(mem_aes, key_p, 512, 4, NO_PRINT_VALUES); 
+											data_write[0]=0x00;
+											MWr32(mem_aes + 2047, data_write, 1, 1, NO_PRINT_VALUES); 
+											
+											do{ 
+												MRd32(mem_ctrl + 0x22, data_read, 1, 1, NO_PRINT_VALUES); 
+												usleep(150);
+												} while (!(data_read[0] & 0x01));
+											data_write[0]=0x00;
+											MWr32(mem_ctrl + 0xA3, data_write, 1, 1, NO_PRINT_VALUES); 		
+											//printf("** Encrypt Done **\n");	
+
+											MRd32(mem_aes, data_enc_key_i, 512, 4, NO_PRINT_VALUES); 
+											
+											
+											//printf("\nKey%d: ",key_idx);	
+											if (size_idx==0)
+												{
+													memcpy(open_ssl_key+16, ((uint8_t*)key_p)+32*key_idx, 16);
+													memcpy(open_ssl_key, (((uint8_t*)key_p)+32*key_idx)+16, 16);
+												}
+											else 
+												{ 
+													memcpy(open_ssl_key, (((uint8_t*)key_p)+32*key_idx), 32);
+												}
+												
+											#if _DEBUG	
+												for (int i = 0; i<32; i++)
+												{
+													printf("%2.2x",open_ssl_key[i]);	
+												}
+											#endif 
+									
+											// Save a copy for later use
+											memcpy(src, key_p, sizeSecsBuffer);
+											#if DEBUG	
+												for (int i = 0; i<32; i++)
+												{
+													printf("%2.2x",src[i]);	
+												}
+											#endif 
+												// Encrypt data using standard OpenSSL functions
+												openSSLEnc(open_ssl_key, iv, aes_size[size_idx], aes_mode[mode_idx], dst_ssl, src, sizeSecsBuffer);		//+16*size_idx									
+										
+											//printf("\nCheck encryption with key%d\n",key_idx);	
+											for (int j = 0; j<16; j++)
+													{	
+													for (int i = (32*j); i<(32*(j+1)); i++)
+														{
+															if (dst_ssl[i]!=data_enc_key_i[i])
+																{
+																	printf("error @ byte %d. Expected encrypted data: %2.2x Got encrypted data %2.2x\n",i,dst_ssl[i],data_enc_key_i[i]);
+																	cmp_err++;	
+																}
+														}
+													}
+											if (cmp_err==0) 
+												{ 
+													printf("Key%d verification PASSED\n",key_idx);
+												}
+											else 
+												{ 
+													printf("Key%d verification FAIL",key_idx);
+													cmp_err=0;
+													
+												}
+											
+											#if _DEBUG	
+												{	
+													for (int j = 0; j<16; j++)
+														{
+														printf("\nla riga cifrata %d è: ",j);	
+														for (int i = (32*j); i<(32*(j+1)); i++)
+															{
+																printf("%2.2x",dst_ssl[i]);	
+															}
+														}
+												}; 
+												
+												{	
+													for (int j = 0; j<16; j++)
+														{
+														printf("\nla riga cifrata expected %d è: ",j);	
+														for (int i = (32*j); i<(32*(j+1)); i++)
+															{
+																printf("%2.2x",data_enc_key_i[i]);	
+															}
+														}
+												}; 
+											#endif 
+											
+										}	
+									}			
+								}			
+
+							if (iter_fail) {
+								fail_count++;
+								printf("Cmd_46 iteration %u/%u: FAIL\n", rep + 1, total_reps);
+								break;
+							} else {
+								pass_count++;
+								printf("Cmd_46 iteration %u/%u: PASS\n", rep + 1, total_reps);
+							}
+						}
+
+						if (fail_count == 0) {
+								printf("Cmd_46 PASSED: repeated Cmd_41 verification %u/%u.\n", pass_count, total_reps);
+							} else {
+								printf("Cmd_46 FAILED: PASS=%u FAIL=%u (stopped at first failing iteration).\n", pass_count, fail_count);
+							}
+
+						free(dst_ssl);			
+						free(src);
+						free(data_enc_key_i);
+						
+						
+						wait_to_continue();
+						break;
+						return 0;
+					}
+					
+					
+
 
 				case 50:
 					{
